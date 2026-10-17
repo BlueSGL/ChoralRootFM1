@@ -1,6 +1,7 @@
 # GRAIN: a granular engine over material it makes itself (design, 2026-10-15)
 
-**Status: built through step 5 (2026-10-15 / 16, HISTORY 3y133 .. 3y137): the engine is in the firmware as engine 8
+**Status: built through step 5 (2026-10-15 / 16, HISTORY 3y133 .. 3y137; MORPH a mix and the render in place since
+3y167 .. 3y169: "The third phase", below): the engine is in the firmware as engine 8
 (`firmware/src/eng_grain.c` over `grain_src.c`), on the unit since 3y136's build, and since the owner's first listening
 (3y137, below: "The second phase") with its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and
 the wave band; its presets not yet by ear (step 6). Merged on main d75523e (v0.24-beta1 with the flash diet) on the owner's word, 2026-10-16: XIP 537 068 B (93.7 %), POOL 97.0 % (the size table). A sound saved on the first build (a 20-byte version-1 record, the owner's U033 DARK HAZE) loads again since 3y139: the pool's reader takes that length beside the 64-byte version 2.** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
@@ -18,16 +19,16 @@ part it was good at (a grain pool shared by the voices, the Hann window, SIZE DE
 level), and replaces its source: no samples, no decoder, no seek index. **Four knobs render the material into a short
 RAM buffer: TYPE (a family of sound), TONE (its brightness or colour), MOTION (how it moves over its length) and SEED
 (a variant).** The sound stores the four values, never audio; the same values render the same buffer, bit for bit, on
-the host and the unit. **And two of them: a sound has sources A and B, each with its own four knobs, and MORPH blends
-the grains between them** (the owner, after the first sketches: "What would be really cool is if you could generate
+the host and the unit. **And two of them: a sound has sources A and B, each with its own four knobs, and MORPH mixes
+them, the grains reading the mix** (3y167; until then each grain read one or the other: the owner, after the first sketches: "What would be really cool is if you could generate
 two waves, each with their own settings, and then there's a parameter to morph between them").
 
 ## In three sentences
 
 A GRAIN sound holds two 743 ms buffers at 22.05 kHz (16 384 samples, 32 KB of POOL each: sources A and B) that a
-small deterministic macro-synth fills in about 4 .. 40 ms each of core 0's main loop whenever a sound loads or a
-source knob turns, in slices, while the grains keep reading the buffers they had. Up to 16 grains a part, shared by up
-to 8 voices, read A or B in MORPH's share, at the note's rate against the buffer's root (C4), windowed, spread round
+small deterministic macro-synth fills in about 12 .. 55 ms each of core 0's main loop whenever a sound loads or a
+source knob turns, in slices over two passes, written over the old material while the grains play on (3y168). Up to
+16 grains a part, shared by up to 8 voices, read A and B mixed by MORPH (3y167), at the note's rate against the buffer's root (C4), windowed, spread round
 POS, reversed and detuned by RAND, through a filter and the platform's envelope: Felucca's player over RAM. The engine
 costs about 11 .. 12 KB of flash (the core is 7.5 KB measured), 64 KB of POOL (the two buffers; a second part on GRAIN
 shares them), nothing of RAM to speak of, and at its worst about 600 .. 900 us of a 2902 us half for a full part, a
@@ -45,8 +46,8 @@ is version 2, 64 bytes; a version-1 record (the first build's 20 bytes) loads wi
 | "Modulation amount should be the same as it is in the VA engine in that the amounts can be adjusted as decimals" | AMT exactly the VA's since 3y110: hundredths on the knob (`F_FIX2`), tenths below 6, whole numbers from 6, a per-slot fine flag in the patch (`GQ_MFINE0 / 1`), the same `va_amt_q` knob rule and `VA_AMX` render scale |
 | "The LFO needs to be able to be switched to sync with rates matching the VA engine" | two LFOs of the engine's (`LFO 1`, `LFO 2`: RATE WAVE DEPTH FADE; `LFO SYN`: SYNC1 SYNC2), the VA's waves (SIN TRI SAW SQR S&H), its free rates and, synced, its list (N_VA_SYNC: 8BARD .. 256T, 4 / 3 / 2 ms) with the same rescale when SYNC switches; FADE from the note, a voice; DEPn and RATEn as destinations |
 | "Need to be able to change scan between forward and reverse and be able to make it scan very slowly" | SCAN -64 .. +63 (`F_BIPCT`): the sign the direction, a ramp over the whole buffer (POS the start), a round in about 110 s at 1, halving every 8, 0.47 s at 64; 0 holds |
-| "The generated A/B waveforms and also the combined morphed one" | the wave band (`ENG_B_WAVE`, `cr_draw.c CR_W_WAVE`, the data from `eng_grain.c grain_wave`): on the SRC screen the active lane's buffer (A on SRC 1, B on SRC 2) in white; on the GRAIN screen both at once, A blue and B orange, each as bright as MORPH gives it (MORPH 0: A alone bright; 127: B); SPRD a dim green span round POS, POS a white line that moves with SCAN |
-| "animated grains moving across the waveform" | every grain sounding on the part is a bright vertical line of its source's colour at its place in the buffer, as strong as its window is open: they travel as they read (forward or reversed), appear and fade with DENS and SIZE; the band redraws every third frame while the screen is open (20 a second; a redraw is ~100 lines over the LCD), and holds while a source renders |
+| "The generated A/B waveforms and also the combined morphed one" | the wave band (`ENG_B_WAVE`, `cr_draw.c CR_W_WAVE`, the data from `eng_grain.c grain_wave`): on the SRC screen the active lane's buffer (A on SRC 1, B on SRC 2) in white; on the GRAIN screen both at once, A blue and B orange, each as bright as MORPH gives it (MORPH 0: A alone bright; 127: B); SPRD a dim green span round POS, POS a white line that moves with SCAN (3y167: the GRAIN screen draws the mix: the third phase) |
+| "animated grains moving across the waveform" | every grain sounding on the part is a bright vertical line of its source's colour at its place in the buffer, as strong as its window is open: they travel as they read (forward or reversed), appear and fade with DENS and SIZE; the band redraws every third frame while the screen is open (20 a second; a redraw is ~100 lines over the LCD), and holds while a source renders (3y167 .. 3y168: one colour; while a source renders, redrawn as each render lands) |
 | "Filter should use the same filter from VA engine" | the VA's SVF a voice (`va_fweights`, `va_svf`: FTYPE 0 .. 127 round LP BP HP NOTCH with the crossfade between, CUT RES, DRIVE's pre-filter tanh 1x .. 4x, KTRK round C4, the same knee), on the `FILTER` (CUT RES FTYPE DRIVE) and `FILTER+` (KTRK) pages under the filter band |
 
 Also: `ENV 1` and `ENV 2` are plan screens (so ENV 2 reads "ENV 2 · mod", not the title rules' "filter"); the window is
@@ -57,6 +58,122 @@ before). **Flash after it: XIP 569 620 B of 573 440 (99.3 %), 3.8 KB left**; RAM
 minsize) over the whole of GRAIN gives back 80 bytes (measured: 569 540 with it): the audio code is -Os already. What
 would give flash back: a family of the generator (DRONE 1.1 KB, VOWEL 0.95, SWEEP 0.85 of code each), the second LFO or
 ENV 2 (a few hundred bytes each), or room found elsewhere in the image: the owner's call.
+
+## The third phase: MORPH a mix, the render in place (the owner, 2026-10-16, HISTORY 3y167 .. 3y169)
+
+The owner, after playing GRAIN on the unit: "For morph, it morphs the grains not the waveforms, I think it should
+basically mix and blend the waveforms, so they are mixed together and the grains are scanning the mixed waveform. Mix
+should be realtime." "For the wave generation, I'd like this to maybe be spaced across frames so you can change the
+wave generation params in realtime without slowdown, instead of having it pause and regenerate the whole thing in one
+frame." "Mixing the A and B buffer should be free cost-wise. I'd go with the render in place, if that is not great
+we can try third buffer."
+
+**MORPH is a mix (3y167).** A grain has one read head over both buffers: a fetch reads A and B at the same place and
+blends them, `b = A + (B - A) x MORPH` (Q15, 0 .. 32768 = B alone: (B - A) x 32768 still fits int32), and the
+grain's two-sample interpolation, window and level are as before. MORPH is the voice's effective one (the knob, the
+track's SHP, the matrix's MORPH from ENV 1 / ENV 2 / the LFOs / VEL / KEY / RAND / MODW), taken once a block as
+before but **ramped a fetch** from the last block's value (`voice_t.s[1]`) to this one's, so an LFO or an envelope
+on MORPH does not zipper at the block rate; the step a fetch is (m1 - m0) / the fetches the grain makes in the
+block (`GP_RCP`, 32768 / n rounded down: no divide, never past m1). Where and when the grains start no longer depends
+on MORPH (the old share's Bresenham count is gone), so the test checks the mix exactly: MORPH 64's output is A's and
+B's outputs mixed sample for sample. **The root:** one read head, one root, **source A's** (`grs.root16[0]`): MORPH
+0 plays A exactly as before; a PLUCK as B (ACID DUST) plays 6 cents sharp of A, a PLUCK as A (STRUM) leaves B 6
+cents flat (the average would put both 3 cents off). A linear mix of two unrelated materials sits about 3 dB under
+their average at MORPH 64 (CLOUD PAD's sweep: 7 % RMS at A, 3 .. 4 % in the middle, 5 % at B); an equal-power law
+would cost a second multiply a fetch: the owner's call after listening.
+
+The loop, from `build/choralroot.dis` (`grain_render`, `gp_run` inlined), per output sample of a grain:
+
+| | before (3y166) | after |
+| --- | --- | --- |
+| forward: the sample (interpolate, window, accumulate, the phase) | 20 | 18 |
+| forward: a fetch (C4 at the root: half a fetch a sample; 1 .. 2 at an octave or two up) | 9 | 14 (a second read, the multiply-add, MORPH's step) |
+| reverse: the sample / a fetch | 20 / 9 | 16 / 11 |
+| a forward grain at C4 (0.5 fetch) / an octave up (1) / two (2) | 24.5 / 29 / 38 | 25 / 32 / 46 |
+
+The first version (the fetch indexing `grain_buf[0][pos]` and `grain_buf[1][pos]`, MORPH's step a sample) was 22 +
+18 a fetch: the compiler rebuilt the second buffer's address on every fetch (the load's offset reaches a few hundred
+bytes, not 32 KB) and spilled the step; two read pointers stepped together and the step a fetch gave it back. The
+regress tool's host count (8 notes held, instructions a sample): CLOUD PAD 1477 -> 1542, SHIMMER 1546 -> 1685, BREATH
+PAD 1471 -> 1543, FROZEN 1417 -> 1495, STRUM 1355 -> 1389, SWARM 1494 -> 1552, ACID DUST 1622 -> 1678, GLITCH 1409 ->
+1458 (+2.5 .. 9 %; `tests/cpu_baseline.txt`); `tests/target_budget.py`'s weighted count of `grain_render` 1162 ->
+1394 (the mix and the step's ramp below; its budget line moved with it). In the unit's terms a full part's grains (16) at C4
+are 16 x 25 x 128 / 205 = 250 us a half (before: 245), an octave up 320 (290).
+
+**The wave band** draws the mix the grains read on the GRAIN screen: A's and B's cached min / max envelopes weighted
+by MORPH as the latest note plays it (`gp_part_t.morph`, modulation included; the patch's MORPH with no note), in a
+colour from A's blue to B's orange; the grains are one colour (white), as they read both. The SRC screens draw their
+source alone, as before. The envelopes are kept column by column as the render writes (`grain_wv_dirty`: the columns
+a slice touched are retaken when the band asks), not whole after each render.
+
+**The render in place (3y168).** No lock, no fade: the grains play on while the new material is written over the
+old. `gs_finish` normalizes and high-passes over the whole buffer, which a partial write cannot do, so the render is
+**two passes of the deterministic generator** (`grain_src.c`: `gs_step_to`, `gs_measure`, `gs_gain`, `gs_apply`):
+a measuring pass renders slice by slice into a scratch (`grain_sc`, 2.3 KB of POOL), runs the finish's high-pass
+over it and keeps the peak, and writes nothing; then the writing pass renders again from the start, high-passes and
+applies the measured gain as it goes, and writes each slice over the old material. The high-pass is the same
+recursion over the same raw samples, so **the finished buffer is byte for byte the whole render's**:
+`tests/cr_grain_golden.txt` holds untouched, and the test compares every family's in-place render with `gs_finish`'s.
+PLUCK's string reads its own last 85 samples: the scratch keeps the last slice's raw tail ahead of the next
+(`GS_HIST` 128). Slices by TYPE (`GRAIN_SLICE_N`), the cost at 205 instructions a us (x 1.5 the unit's factor):
+
+| TYPE | before: a buffer, ms | now: two passes, ms | slice | polls a render | a poll, ms |
+| --- | --- | --- | --- | --- | --- |
+| PLUCK | 6.6 / 10 | 11.9 / 18 | 1024 | 32 | 0.40 / 0.60 |
+| DRONE | 28.1 / 42 | 54.9 / 82 | 256 | 128 | 0.44 / 0.65 |
+| BELL | 9.9 / 15 | 18.6 / 28 | 512 | 64 | 0.30 / 0.46 |
+| BREATH | 12.2 / 18 | 23.3 / 35 | 512 | 64 | 0.38 / 0.57 |
+| CHIRP | 10.2 / 15 | 19.1 / 29 | 512 | 64 | 0.31 / 0.47 |
+| SWEEP | 21.1 / 32 | 41.0 / 61 | 256 | 128 | 0.33 / 0.49 |
+| VOWEL | 25.6 / 38 | 50.0 / 75 | 256 | 128 | 0.40 / 0.60 |
+| METAL | 16.9 / 25 | 32.5 / 49 | 512 | 64 | 0.52 / 0.78 |
+
+(The families' loops 58 .. 327 instructions a sample, `tools/grain_cost.py`, unchanged by the slice pointer; the
+measuring pass 11 a sample, the writing pass 20 and the copy; before, one slice of 1024 was 2.4 ms of DRONE with the
+unit's factor.) A render costs twice the CPU it did, but nothing goes quiet: **a poll stays under 0.8 ms** (the
+owner's "without slowdown": the frame that runs it keeps its time), the core-0 tick and the main-loop poll keep their
+split, and the host paths (`GRAIN_ASYNC 0`: hostsim, regress) render whole in the tick as before.
+
+**Latest wins at the end of a render, never inside one.** A knob turned during a render lets it finish on the knobs
+it started with, and the next render starts on the knobs as they are then (the turns between are skipped). The old
+rule (restart on every change) would never finish while a knob is turned steadily (a DRONE render is ~120 ms of
+main-loop time; a knob sends a detent every few tens of ms), so the sound would only move when the hand stops; with
+the render finishing, it moves with every render, several times a second. Both sources asked: the one not rendered
+last goes first, so turning A on and on does not hold B's change back. `tools/grain_listen.c`'s model of the unit
+(the polls get half the time, x 1.5), turning TONE 0 .. 127 over 8 s and SEED 0 .. 60 over 8 s of a DRONE under a
+held chord: **97 renders landed in the 18 s; 0.00 s under 1 % of the chord's level** (before: 60 renders, **13.1 s
+silent**).
+
+**Clicks (3y169).** A grain reading where the head writes sees the old material become the new: the head overtakes it
+between two blocks (85 .. 90 % of the cases), or it reads across the head inside one. Measured on the host
+(`tools/grain_listen.c`, the turn above, A of each TYPE alone): 1 400 .. 2 200 such splices in 18 s, the step
+between the old and the new sample at the grain's place a median 0.5 % of the grain's level, the 99th percentile 11
+.. 32 %, at most 38 .. 109 %. Two softeners, both cheap: **a crossfade at the write head** (each slice's last
+`GRAIN_RAMP` 64 samples fade from the new material into the old ahead, the next slice writes them whole: a grain
+reading across the head hears a 64-sample crossfade; not on the last slice, so the finished buffer stays exact), and
+**a grain's step ramped out** (the tick takes the samples rewritten since the last block; a grain whose two held
+samples are among them takes the new ones at once and carries the difference as an offset ramped to zero over
+`GP_DECLICK` 4 blocks, 2.9 ms; a loop of its own in the blocks that need it). What a grain plays, its peak second
+difference a block in % of its level, in the blocks with a splice against the clean blocks' 99.9th percentile:
+
+| A | clean blocks: 99.9th | spliced: 99th, softened (off) | spliced above the clean 99.9th, softened (off) |
+| --- | --- | --- | --- |
+| PLUCK | 13.5 | 8.5 (13.3) | 0.25 % (0.90 %) |
+| DRONE | 35.8 | 27.5 (38.0) | 0.09 % (1.17 %) |
+| BELL | 4.0 | 4.8 (11.5) | 1.33 % (4.05 %) |
+| BREATH | 100 | 64.8 (69.5) | 0 (0) |
+| CHIRP | 10.8 | 40.0 (94.0) | 5.34 % (26.7 %) |
+| SWEEP | 33.5 | 42.8 (64.0) | 1.55 % (6.17 %) |
+| VOWEL | 12.8 | 23.5 (57.5) | 2.52 % (8.34 %) |
+| METAL | 5.0 | 8.0 (23.3) | 2.70 % (18.2 %) |
+
+So the softeners take 3 .. 10 times fewer spliced blocks out of the material's own range; what is left is a change
+of slope where the material changes (an offset cannot take that out: the old material is gone), largest on CHIRP,
+whose SEED turns its sweep the other way. A third buffer (the render beside, the grains moved over at a block
+boundary) would have no splices at all for 32 KB of POOL (89.7 % -> 99.2 %): the owner's fallback if the in-place
+render is not great by ear. The listening files: `build/grain-mix/INDEX.md` (`tools/grain_listen.c`).
+
+Sizes: XIP 541 948 -> 542 764 B (94.7 %), RAM 80 368 -> 80 544 B, POOL 306 196 -> 308 508 B (89.7 %, the scratch).
 
 ## 1. The source generator
 
@@ -76,9 +193,9 @@ power of two of samples (the position arithmetic stays shifts), longer than the 
 and leaves POOL at 88.5 % with two buffers. **Two buffers: the sound's sources A and B.** They are the chord part's;
 a bass part on GRAIN plays the same two buffers with its own grain knobs and its own MORPH (its source pages show the
 chord part's values, greyed: "shared"). So a re-render has no spare buffer: **it goes in place, one source at a
-time, with a fade**: the grains reading the buffer being re-rendered fade out over one block (the other source's
-grains keep sounding, so at MORPH 64 half the texture stays), the slices write the buffer, the grains come back when
-it is done: 20 .. 60 ms of that source quiet on a knob turn of its row. The alternative, always seamless, is three
+time**: until 3y168 with a fade (the grains reading the buffer being re-rendered faded out over one block, the slices
+wrote the buffer, the grains came back when it was done: that source quiet while its knobs turned); since 3y168
+written over the old material while the grains play on (the third phase, above). The alternative, always seamless, is three
 buffers of 557 ms (A, B and a scratch the pointers rotate through, 90.9 %); the sketches render 743 ms (open
 question 1).
 
@@ -130,13 +247,17 @@ choice is 28 bytes of code in `gp_spawn`) and nothing of memory beyond the secon
 reading both buffers at its position and mixing them by MORPH, is a plain crossfade (two layers that fade; a second
 fetch a sample, +30 % a grain): the sketches render it beside the granular morph for two pairs (`-sweep-xfade.wav`)
 so the owner can hear the difference, and it is not the design. **Decided** (the owner, 2026-10-15, after hearing
-them: "Keep the granular morph (each grain reads A or B by MORPH's share) as designed").
+them: "Keep the granular morph (each grain reads A or B by MORPH's share) as designed"). **Changed** (the owner,
+2026-10-16, after playing it on the unit: "it morphs the grains not the waveforms, I think it should basically mix and
+blend the waveforms"): since 3y167 every grain reads A and B at its position and mixes them by MORPH, a fetch at a
+time, the grains scanning the mix (the third phase, above), one read more and a multiply-add a fetch.
 
 **MORPH is a modulation destination**: the platform's SHP destination of the track envelope, the LFO and the matrix
 binds to MORPH (Felucca's GRAIN bound SHP to POS; POS has SCAN now). ENV -> MORPH with a sound whose B is a PLUCK
 or METAL and A a DRONE gives B's strike into A's body (the `morph-*-env.wav` sketches: MORPH falling 127 -> 0 in 0.6
 s); LFO -> MORPH breathes between two materials; the matrix's VEL -> MORPH plays B harder. A render of A or B while
-MORPH sits at the other end is not heard at all.
+MORPH sits at the other end is not heard at all. (Since 3y167 the modulation is a voice's, ramped a fetch: an LFO or
+an envelope on MORPH moves the mix smoothly.)
 
 ### When and where the render runs
 
@@ -144,7 +265,8 @@ MORPH sits at the other end is not heard at all.
   (the editor's set, the macros' P_E, the matrix never: the source knobs are not modulation destinations; a render
   is not a per-tick thing). The engine's `block()` hashes the four values; a change posts a request. **Latest wins**:
   a request during a render restarts it on the new values at its next slice; a knob turned through ten detents
-  renders once or twice, not ten times.
+  renders once or twice, not ten times. (Since 3y168 latest wins at the end of a render: it finishes, then the
+  latest knobs render: the third phase.)
 - **Where: core 0's main loop, in slices.** `main.c`'s loop draws a frame every 15 ms and waits the rest of the
   frame in an idle loop (`while (fm1_ms - m < 15u) { ui_input(); ed_service(); }`). `grain_poll()` renders one slice
   of 1024 samples a call (DRONE, the heaviest: 1.6 ms, 2.4 with the unit's factor; PLUCK 0.25 ms) and returns: once
@@ -152,8 +274,10 @@ MORPH sits at the other end is not heard at all.
   frame that fills its 15 ms, the wave band's redraw, left the idle loop no turn and the knobs' renders waited for a
   page change). The audio ISR preempts the main loop as it preempts a frame's drawing: **the audio never waits for
   the render**. A whole buffer is 16 slices: DRONE lands in 26 .. 40 ms of main-loop time when the frames are cheap,
-  within 16 frames (a quarter of a second) when they are not; PLUCK in one or two.
-- **The swap**: the slices write the scratch (the other part's buffer, or in place with the fade: above). When the
+  within 16 frames (a quarter of a second) when they are not; PLUCK in one or two. (Since 3y168: two passes, slices
+  of 256 .. 1024 samples by TYPE, a poll under 0.8 ms: the third phase's table.)
+- **The swap** (the design's; the build went in place, first with the fade, since 3y168 under the playing grains):
+  the slices write the scratch (the other part's buffer, or in place with the fade: above). When the
   render is done, `block()` (the audio ISR) sees the ready flag at a block boundary and takes the new pointer; the
   grains in flight hold their own `src` pointer and finish on the old buffer; the next render waits for the pool to
   have no grain on the old buffer (`gp_part_t` counts them). Nothing is copied.
@@ -175,7 +299,7 @@ From `eng_grain.c`, what stays, what goes, what changes:
 | the pool | GR_NG 12 grains a part shared by GR_POLY 3 voices (a voice's share GR_NG / voices, at least 2) | **GP_NG 16 grains, GP_POLY 8** (ChoralRoot's chords are eight notes); the share rule kept: 16 / voices, at least 2 |
 | a grain | position, length (SIZE 10 .. 393 ms), rate Q16, direction, Hann window (257-point table, linear interpolation), level 1 / sqrt(overlap); the window times the level ramps linearly over the block | **kept as it is** (`gp_run` is `gr_run` with `src[pos++]` for the decode); a reverse grain reads `src[--pos]`: Felucca's 128-sample reverse windows go |
 | the rate | the note against the zone's root, PITCH, a random detune (RAND, quadratic, up to +-1 octave), capped at 2 source samples an output sample | the note against the buffer's root (GS_ROOT16 = C4, PLUCK's 961), PITCH -24 .. 24, the detune as before, times 22 050 / 44 100; the cap kept: **the range is C1 .. C6 from one buffer** (two octaves up from the root at the cap; downwards unlimited) |
-| the start | DENS a second (1 .. 98), SPRD jitters the interval; POS (+ the track's SHP modulation) the centre, SPRD the random spread; at most one start a voice a block | the same, plus **the grain's source: A or B by MORPH's share**; POS also moves by **SCAN** (a slow triangle over the buffer, 0 off .. a round in 0.5 s: the frozen-scan and the wandering-pad movements of the sketches); SHP modulates MORPH now, not POS |
+| the start | DENS a second (1 .. 98), SPRD jitters the interval; POS (+ the track's SHP modulation) the centre, SPRD the random spread; at most one start a voice a block | the same (until 3y167 plus the grain's source, A or B by MORPH's share; since, every grain reads the mix); POS also moves by **SCAN** (a slow triangle over the buffer, 0 off .. a round in 0.5 s: the frozen-scan and the wandering-pad movements of the sketches); SHP modulates MORPH now, not POS |
 | RAND | the detune and the share of reversed grains in one knob | kept in one knob (the row's fourth cell went to MORPH); a REV knob of its own is a later option |
 | TONE | a one-pole low-pass a voice (+ the track's FLT modulation) | **CUT, RES**: the SVF low-pass a voice (`tsvf`), the FILT group's band drawn; the track's FLT modulation adds to CUT |
 | the cost bound | the part's decode load capped at 8 source samples an output sample | none needed: a grain costs the same at any rate; the pool's size is the bound |
@@ -299,7 +423,7 @@ The tightest resource. `FELUCCA_SIZE`'s minsize pass (tools/size_fns.py) can tak
 | the platform's `voice_amp` on the voice's output | ~10 | a sample | 6 / 9 |
 | 8 voices | | | 220 / 330 |
 | a grain start (`gp_spawn`: two `pow2_q16`, the fits, MORPH's choice) | ~160 | a start, at most one a voice a block | 8 voices: 6 / 9 |
-| MORPH | 0 | a sample (a grain reads one buffer whatever MORPH is) | 0 |
+| MORPH | 0 (3y167: 5 a fetch, ~1.5 .. 8 a grain-sample: the third phase) | a sample (until 3y167 a grain read one buffer whatever MORPH was) | 0 (3y167: ~2 .. 30 a half for 16 grains) |
 | **a part at its worst: 8 voices, the pool full** | | | **~600 / ~900 (21 / 31 %)** |
 | CLOUD PAD's chord (SIZE 92: 142 ms grains, DENS 88: 24 a second: 3.4 grains a voice; 6 notes fill the pool) | | | ~550 / ~830 |
 | GLITCH's chord (SIZE 24: 20 ms, DENS 112: 61 a second: 1.2 a voice; 8 notes: 10 grains) | | | ~450 / ~680 |

@@ -1558,9 +1558,9 @@ static uint32_t ce_band_plan(const track_t *t, const ce_view_t *vw, uint8_t *o)
         o[1] = (uint8_t)(ce.part ? CR_PART_BASS : CR_PART_CHORD);
         w = cr_wave_src ? cr_wave_src(o[1]) : 0;
         /* the grains move at a third of the frame rate (a band redraw is ~100 lines over the LCD, most of a frame:
-         * every frame would leave the renders no idle time), and not at all while a source renders: the render gets
-         * the frames, the band shows the new buffer when it lands (3y138) */
-        o[2] = w && w->lock ? 0xFFu : (uint8_t)((tick++ / 3u) & 0x7Fu);
+         * every frame would leave the renders no idle time), and while a source renders only when a render lands:
+         * the render gets the frames, the band shows each new buffer (3y138; in place, 3y168) */
+        o[2] = w && w->busy ? (uint8_t)(0x80u | (w->gen & 0x7Fu)) : (uint8_t)((tick++ / 3u) & 0x7Fu);
         return 3;
     }
     if (h->band == ENG_B_FILTER || h->band == ENG_B_WINDOW) {

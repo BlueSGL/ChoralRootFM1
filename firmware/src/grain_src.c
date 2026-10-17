@@ -3,7 +3,9 @@
 /* GRAIN's source generator (docs/GRAIN.md section 1): four knobs render the material a GRAIN sound's grains read
  * into a buffer of GS_N samples at GS_RATE, deterministic (the same knobs render the same bytes on the host and the
  * unit: tests/cr_grain_test.c's goldens), in slices (gs_begin, gs_step n samples at a time from the state it keeps,
- * gs_finish once the buffer is whole), from dsp.c's blocks and felucca_tables.h. Included by the engine (eng_grain.c,
+ * gs_finish once the buffer is whole; or gs_step_to into a slice's scratch and the finish's two passes a slice at a
+ * time, gs_measure then gs_apply: the engine's render in place, the same bytes), from dsp.c's blocks and
+ * felucca_tables.h. Included by the engine (eng_grain.c,
  * step 2), by tools/grain_sketch.c (the sketches, the same code heard) and by the test. GS_API / GS_FAM: static here;
  * tools/grain_cost.py's device compile makes them extern and the families noinline to read each one's listing. */
 #ifndef GS_API
@@ -74,7 +76,7 @@ static void gs_pluck_begin(gs_t *g)
     g->s[7] = g->s[8] = 0;                                   /* the burst's DC blocker (a low-passed noise burst carries an
                                                               * offset, and the string's loop would hold it) */
 }
-GS_FAM void gs_pluck(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_pluck(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     int32_t k = g->s[0], dec = g->s[1], b = g->s[2], a = 32768 - b, lp = g->s[5], x1 = g->s[7], hp = g->s[8];
     uint32_t i;
@@ -82,7 +84,8 @@ GS_FAM void gs_pluck(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         int32_t y = 0;
         if (i >= GS_PLUCK_N + 1u)                           /* (rounded to nearest: a floored shift's bias would
                                                               * integrate round the loop into an offset) */
-            y = (((buf[i - GS_PLUCK_N] * a + buf[i - GS_PLUCK_N - 1u] * b + 16384) >> 15) * dec + 32768) >> 16;
+            y = (((out[(int32_t)(i - i0) - (int32_t)GS_PLUCK_N] * a + out[(int32_t)(i - i0) - (int32_t)GS_PLUCK_N - 1] * b
+                   + 16384) >> 15) * dec + 32768) >> 16;
         if (g->s[4] > 0) {
             lp += ((gs_white(g) - lp) * k) >> 15;
             hp = lp - x1 + ((hp * 32112) >> 15);             /* one pole at ~70 Hz */
@@ -94,7 +97,7 @@ GS_FAM void gs_pluck(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
             g->s[4] = GS_PLUCK_N;
             g->s[6] += g->s[3];
         }
-        buf[i] = gs_clip(y);
+        out[i - i0] = gs_clip(y);
     }
     g->s[5] = lp;
     g->s[7] = x1;
@@ -120,7 +123,7 @@ static void gs_drone_begin(gs_t *g)
     g->s[2] = ((16 + g->motion / 4) << 8);                   /* the sweep's depth */
     g->s[3] = 40 + ((g->seed >> 1) & 3u) * 20;               /* resonance */
 }
-GS_FAM void gs_drone(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_drone(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i, pw = (uint32_t)g->s[0];
     for (i = i0; i < i1; i++) {
@@ -138,7 +141,7 @@ GS_FAM void gs_drone(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         g->ph[2] += g->inc[2];
         g->ph[3] += g->inc[3];
         y = tsvf_lp(&g->f[0], x >> 2, &g->ic[0], &g->ic[1]);
-        buf[i] = gs_clip(soft_knee(y, 24000));
+        out[i - i0] = gs_clip(soft_knee(y, 24000));
     }
 }
 
@@ -163,7 +166,7 @@ static void gs_bell_begin(gs_t *g)
         g->ph[3] = gs_rnd(g) & 0x3FFFFFFFu;
     }
 }
-GS_FAM void gs_bell(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_bell(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i;
     for (i = i0; i < i1; i++) {
@@ -183,7 +186,7 @@ GS_FAM void gs_bell(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         }
         g->ph[0] += g->inc[0];
         g->ph[1] += g->inc[1];
-        buf[i] = gs_clip((y * amp) >> 15);
+        out[i - i0] = gs_clip((y * amp) >> 15);
     }
 }
 
@@ -201,7 +204,7 @@ static void gs_breath_begin(gs_t *g)
     g->a[0] = g->motion * 32767 / 254;                       /* its depth: up to a half */
     g->a[1] = 32767;
 }
-GS_FAM void gs_breath(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_breath(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i;
     for (i = i0; i < i1; i++) {
@@ -213,7 +216,7 @@ GS_FAM void gs_breath(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
             g->a[1] = 32767 - ((g->a[0] * (32767 - osc_tri(g->ph[0]))) >> 16);
             g->ph[0] += g->inc[0] * 32u;
         }
-        buf[i] = gs_clip((gs_svf_bp(&g->f[0], gs_white(g) >> 1, &g->ic[0], &g->ic[1]) * g->a[1]) >> 15);
+        out[i - i0] = gs_clip((gs_svf_bp(&g->f[0], gs_white(g) >> 1, &g->ic[0], &g->ic[1]) * g->a[1]) >> 15);
     }
 }
 
@@ -232,7 +235,7 @@ static void gs_chirp_begin(gs_t *g)
     g->s[7] = 0;                                             /* the sample within the chirp */
     g->s[8] = g->s[4] > 0 ? g->s[2] : g->s[2] + g->s[3];     /* the pitch now, Q16 */
 }
-GS_FAM void gs_chirp(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_chirp(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i;
     for (i = i0; i < i1; i++) {
@@ -255,7 +258,7 @@ GS_FAM void gs_chirp(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         }
         g->s[8] += g->s[4] * g->s[1];
         g->s[7] = k + 1;
-        buf[i] = gs_clip((y * gain) >> 15);
+        out[i - i0] = gs_clip((y * gain) >> 15);
     }
 }
 
@@ -276,7 +279,7 @@ static void gs_sweep_begin(gs_t *g)
     g->s[5] = (g->seed >> 3) & 3u;                           /* 0 down, 1 up, 2 up then down, 3 down then up */
     g->s[6] = 0;
 }
-GS_FAM void gs_sweep(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_sweep(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i, pw = (uint32_t)g->s[0];
     for (i = i0; i < i1; i++) {
@@ -296,7 +299,7 @@ GS_FAM void gs_sweep(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         g->ph[1] += g->inc[1];
         x = softclip(x + (x >> 1));
         y = tsvf_lp(&g->f[0], x, &g->ic[0], &g->ic[1]);
-        buf[i] = gs_clip(soft_knee(y, 20000));
+        out[i - i0] = gs_clip(soft_knee(y, 20000));
     }
 }
 
@@ -319,7 +322,7 @@ static void gs_vowel_begin(gs_t *g)
     g->ph[1] = gs_rnd(g);
     g->inc[0] = gs_inc(GS_ROOT16);
 }
-GS_FAM void gs_vowel(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_vowel(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i;
     for (i = i0; i < i1; i++) {
@@ -338,7 +341,7 @@ GS_FAM void gs_vowel(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
         y = gs_svf_bp(&g->f[0], x, &g->ic[0], &g->ic[1]);
         y += (gs_svf_bp(&g->f[1], x, &g->ic[2], &g->ic[3]) * 19661) >> 15;
         y += (gs_svf_bp(&g->f[2], x, &g->ic[4], &g->ic[5]) * 9830) >> 15;
-        buf[i] = gs_clip(soft_knee(y, 24000));
+        out[i - i0] = gs_clip(soft_knee(y, 24000));
     }
 }
 
@@ -358,7 +361,7 @@ static void gs_metal_begin(gs_t *g)
     g->s[6] = 90;                                            /* the strike's samples */
     g->s[7] = g->tone * 64;                                  /* .. and level */
 }
-GS_FAM void gs_metal(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
+GS_FAM void gs_metal(gs_t *g, int16_t *out, uint32_t i0, uint32_t i1)
 {
     uint32_t i, k;
     for (i = i0; i < i1; i++) {
@@ -374,7 +377,7 @@ GS_FAM void gs_metal(gs_t *g, int16_t *buf, uint32_t i0, uint32_t i1)
             y += (gs_white(g) * g->s[7]) >> 14;
             g->s[6]--;
         }
-        buf[i] = gs_clip(y);
+        out[i - i0] = gs_clip(y);
     }
 }
 
@@ -401,8 +404,11 @@ GS_API void gs_begin(gs_t *g, uint32_t type, uint32_t tone, uint32_t motion, uin
     default: gs_metal_begin(g); break;
     }
 }
-/* render the next n samples into buf (at most up to GS_N); returns the samples rendered so far */
-GS_API uint32_t gs_step(gs_t *g, int16_t *buf, uint32_t n)
+/* the next n samples (at most up to GS_N) into out[0 ..], the family's own samples raw (before the finish); out[-1 ..
+ * -GS_HIST] must hold the GS_HIST raw samples before them (PLUCK's string reads its own last 85: a slice renders into
+ * a scratch with the last slice's tail ahead of it, eng_grain.c grain_slice); returns the samples rendered so far */
+#define GS_HIST 128u
+GS_API uint32_t gs_step_to(gs_t *g, int16_t *out, uint32_t n)
 {
     uint32_t i0 = g->pos, i1 = i0 + n;
     if (i1 > GS_N)
@@ -410,37 +416,69 @@ GS_API uint32_t gs_step(gs_t *g, int16_t *buf, uint32_t n)
     if (i1 <= i0)
         return g->pos;
     switch (g->type) {
-    case GT_PLUCK: gs_pluck(g, buf, i0, i1); break;
-    case GT_DRONE: gs_drone(g, buf, i0, i1); break;
-    case GT_BELL: gs_bell(g, buf, i0, i1); break;
-    case GT_BREATH: gs_breath(g, buf, i0, i1); break;
-    case GT_CHIRP: gs_chirp(g, buf, i0, i1); break;
-    case GT_SWEEP: gs_sweep(g, buf, i0, i1); break;
-    case GT_VOWEL: gs_vowel(g, buf, i0, i1); break;
-    default: gs_metal(g, buf, i0, i1); break;
+    case GT_PLUCK: gs_pluck(g, out, i0, i1); break;
+    case GT_DRONE: gs_drone(g, out, i0, i1); break;
+    case GT_BELL: gs_bell(g, out, i0, i1); break;
+    case GT_BREATH: gs_breath(g, out, i0, i1); break;
+    case GT_CHIRP: gs_chirp(g, out, i0, i1); break;
+    case GT_SWEEP: gs_sweep(g, out, i0, i1); break;
+    case GT_VOWEL: gs_vowel(g, out, i0, i1); break;
+    default: gs_metal(g, out, i0, i1); break;
     }
     g->pos = i1;
     return i1;
 }
-/* the whole buffer rendered: take its DC out (a one-pole high-pass at ~20 Hz: PLUCK's loop and SWEEP's pulse carry
- * some) and normalize it to GS_PEAK (a gain of at most 8); returns the gain, Q12 */
-GS_API int32_t gs_finish(int16_t *buf)
+/* render the next n samples into buf (at most up to GS_N): buf[pos ..], the history is the buffer's own; returns the
+ * samples rendered so far */
+GS_API uint32_t gs_step(gs_t *g, int16_t *buf, uint32_t n)
+{
+    return gs_step_to(g, buf + (g->pos < GS_N ? g->pos : GS_N), n);
+}
+/* the finish, in two passes over the raw samples so that it can run a slice at a time (eng_grain.c's render in
+ * place: a measuring pass that writes nothing, then the writing pass): a one-pole high-pass at ~20 Hz takes the DC
+ * out (PLUCK's loop and SWEEP's pulse carry some), and the buffer is normalized to GS_PEAK (a gain of at most 8) */
+typedef struct { int32_t x1, y, pk; } gs_hp_t;
+static inline void gs_hp_begin(gs_hp_t *h) { h->x1 = 0; h->y = 0; h->pk = 1; }
+static inline int32_t gs_hp(gs_hp_t *h, int32_t x)
+{
+    int32_t y = x - h->x1 + ((h->y * 32581 + 16384) >> 15);   /* (rounded: a floored shift settles at -88) */
+    h->x1 = x;
+    h->y = y;
+    return y;
+}
+/* the measuring pass over n raw samples: the high-passed peak */
+GS_API void gs_measure(gs_hp_t *h, const int16_t *x, uint32_t n)
 {
     uint32_t i;
-    int32_t pk = 1, gain, x1 = 0, y = 0;
-    for (i = 0; i < GS_N; i++) {
-        int32_t x = buf[i], a;
-        y = x - x1 + ((y * 32581 + 16384) >> 15);           /* (rounded: a floored shift settles at -88) */
-        x1 = x;
-        buf[i] = gs_clip(y);
-        a = y < 0 ? -y : y;
+    int32_t pk = h->pk;
+    for (i = 0; i < n; i++) {
+        int32_t y = gs_hp(h, x[i]), a = y < 0 ? -y : y;
         pk = a > pk ? a : pk;
     }
-    pk = pk > 32767 ? 32767 : pk;
-    gain = GS_PEAK * 4096 / pk;
-    gain = gain > 8 * 4096 ? 8 * 4096 : gain;
-    for (i = 0; i < GS_N; i++)
-        buf[i] = gs_clip((buf[i] * gain) >> 12);
+    h->pk = pk;
+}
+/* the gain the measured peak gives, Q12 */
+GS_API int32_t gs_gain(const gs_hp_t *h)
+{
+    int32_t pk = h->pk > 32767 ? 32767 : h->pk, gain = GS_PEAK * 4096 / pk;
+    return gain > 8 * 4096 ? 8 * 4096 : gain;
+}
+/* the writing pass: n raw samples x, high-passed and at the gain, into dst (dst may be x) */
+GS_API void gs_apply(gs_hp_t *h, const int16_t *x, int16_t *dst, uint32_t n, int32_t gain)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        dst[i] = gs_clip((gs_clip(gs_hp(h, x[i])) * gain) >> 12);
+}
+/* the whole buffer rendered: both passes over it in place; returns the gain, Q12 */
+GS_API int32_t gs_finish(int16_t *buf)
+{
+    gs_hp_t h;
+    int32_t gain;
+    gs_hp_begin(&h);
+    gs_measure(&h, buf, GS_N);
+    gain = gs_gain(&h);
+    gs_hp_begin(&h);
+    gs_apply(&h, buf, buf, GS_N, gain);
     return gain;
 }
-

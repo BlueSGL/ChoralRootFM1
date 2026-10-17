@@ -315,14 +315,15 @@ typedef struct {
 #define ENG_BLOB_MAX 160u       /* the largest blob (CZ-1: 144; the VA's 110 and FM6's 128 keep their store records) */
 /* ENG_B_WAVE's data (GRAIN, eng_grain.c grain_wave; drawn by cr_draw.c CR_W_WAVE through cr_screen.h's cr_wave_src): the
  * two buffers' envelopes, cols columns of (min, max) in 1/127 of full scale; the grains sounding (a position 0..255
- * across the buffer, its source 0 A / 1 B, its level 0..255); POS 0..127 as the voices read it (SCAN included), SPRD
- * 0..127, MORPH 0..127 (B's share); lock: bit k = buffer k is being rendered */
+ * across the buffer, its level 0..255: each reads A and B mixed); POS 0..127 as the voices read it (SCAN included),
+ * SPRD 0..127, MORPH 0..127 (B's weight in the mix, as the latest note plays it); busy: a source is being rendered
+ * (in place, the grains playing on); gen: the renders completed (low byte) */
 #define CR_WAVE_GRAINS 16u
 typedef struct {
     uint32_t cols;
     const int8_t *env[2];
-    uint8_t n, gpos[CR_WAVE_GRAINS], gsrc[CR_WAVE_GRAINS], glev[CR_WAVE_GRAINS];
-    uint8_t pos, sprd, morph, lock;
+    uint8_t n, gpos[CR_WAVE_GRAINS], glev[CR_WAVE_GRAINS];
+    uint8_t pos, sprd, morph, busy, gen;
 } cr_wave_t;
 typedef struct {
     uint32_t npages;

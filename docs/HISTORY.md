@@ -5650,3 +5650,75 @@ the FM-1 runs FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". Af
 port: ChoralRoot FM-1 version: ChoralRoot 0.24`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.24
 (86 hold a sound), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0,
 boot stub v3 "booted the app after 64.0 ms; marker ok". Not pushed.
+
+3y167. **GRAIN: MORPH mixes the sources (2026-10-16; the grain-mix session, from main 034f2cc).** The owner, after
+playing GRAIN on the unit: "For morph, it morphs the grains not the waveforms, I think it should basically mix and
+blend the waveforms, so they are mixed together and the grains are scanning the mixed waveform. Mix should be
+realtime." "Mixing the A and B buffer should be free cost-wise." **Built** (`eng_grain.c`): the grain-share morph is
+gone; a grain has one read head over both buffers and a fetch reads A and B at the same place and mixes them,
+`A + (B - A) x MORPH` (Q15, 32768 = B alone), the voice's effective MORPH (the knob, SHP, the matrix: ENV 1, ENV 2,
+the LFOs, VEL, KEY, RAND, MODW) taken a block and ramped a fetch from the last block's (`voice_t.s[1]`; the step from
+`GP_RCP`, 32768 / the block's fetches rounded down: no divide, never past the target). The read head's root is source
+A's (MORPH 0 is A as before; a PLUCK as B plays 6 cents sharp of A, a PLUCK as A leaves B 6 cents flat). The wave
+band's GRAIN screen draws the mix (A's and B's cached envelopes weighted by MORPH as the latest note plays it, in a
+colour from A's blue to B's orange), the grains one colour; `cr_wave_t` loses `gsrc` and `lock` (`busy`, `gen`).
+**The loop** (`build/choralroot.dis`, a forward grain): before 20 instructions a sample + 9 a fetch, after 18 + 14
+(a second read, the multiply-add, MORPH's step); reverse 20 + 9 -> 16 + 11; at C4 (half a fetch a sample) 24.5 -> 25,
+an octave up 29 -> 32, two 38 -> 46. A first version indexing both buffers was 22 + 18 (the second buffer's address
+rebuilt every fetch: the load's offset does not reach 32 KB; the step spilled): two read pointers and the step a
+fetch. The regress tool's host CPU (8 notes held): GRAIN +2.5 .. 9 % (SHIMMER 1546 -> 1685, STRUM 1355 -> 1389);
+`tests/target_budget.py`'s `grain_render` 1162 -> 1394 with the next entry's softeners (its budget line, and
+`grain_tick` 99 -> 35, moved). **The goldens:** 7 of GRAIN's 8 renders changed (FROZEN, at MORPH 0 with nothing on
+it, did not: the mix is A alone, the grains where they were), no other engine's: `tests/golden.txt` and GRAIN's lines
+of `tests/cpu_baseline.txt` re-recorded (GOLDEN_UPDATE / BUDGET_UPDATE into copies, GRAIN's lines taken). A linear mix
+of two unrelated materials sits ~3 dB under their average at MORPH 64 (CLOUD PAD's sweep: 7 % RMS, 3 .. 4 %, 5 %); an
+equal-power law is a second multiply a fetch, for the owner's ear to ask for. docs/GRAIN.md "The third phase",
+MANUAL's GRAIN, EDITOR's wave band.
+
+3y168. **GRAIN: the render in place, over frames (2026-10-16; the grain-mix session).** The owner: "For the wave
+generation, I'd like this to maybe be spaced across frames so you can change the wave generation params in realtime
+without slowdown, instead of having it pause and regenerate the whole thing in one frame." "I'd go with the render
+in place, if that is not great we can try third buffer." **Built:** no lock, no fade; the grains play on while the
+new material is written over the old a slice a poll. The finish (the 20 Hz high-pass and the normalization over the
+whole buffer) cannot run on a partial write, so the render is two passes of the deterministic generator
+(`grain_src.c`: `gs_step_to` into a scratch, `gs_measure`, `gs_gain`, `gs_apply`; `gs_finish` is the two over a
+buffer): a measuring pass that writes nothing, then the writing pass with the measured gain and the same high-pass
+applied as it goes. **The finished buffer is byte for byte the whole render's** (`tests/cr_grain_golden.txt` holds;
+the test compares every family in place with `gs_finish`'s). PLUCK's string reads its own last 85 samples: the scratch
+(`grain_sc`, 2.3 KB of POOL) keeps the last slice's raw tail ahead of the next. Slices by TYPE (`GRAIN_SLICE_N`: 256
+for DRONE SWEEP VOWEL, 512 for BELL BREATH CHIRP METAL, 1024 for PLUCK): a poll 0.30 .. 0.52 ms at the listing's 205
+instructions a us (x 1.5 the unit's factor: under 0.8 ms; before, a 1024-sample DRONE slice was 2.4 ms); a render
+twice the CPU (DRONE 28 -> 55 ms, PLUCK 6.6 -> 11.9), never silent. **Latest wins at the end of a render:** a change
+during one lets it finish on its knobs, then the next starts on the knobs as they are then (restarting on every
+change never finishes while a knob turns: the sound would move only when the hand stops); both asked, the source not
+rendered last first. The core-0 tick and the main-loop poll keep their split; `GRAIN_ASYNC 0` (hostsim, regress)
+renders whole in the tick as before. `tools/grain_listen.c` (new: the engine under a model of the unit's main loop,
+the polls at half the time): TONE then SEED turned over 18 s on a DRONE under a held chord, 97 renders landed and
+0.00 s under 1 % of the chord's level; origin/main's engine: 60 renders, **13.1 s silent**. The band redraws while a
+source renders as each render lands (3y138's rule otherwise). Size: XIP 541 948 -> 542 764 B (94.7 %), RAM 80 368 ->
+80 544, POOL 306 196 -> 308 508 (89.7 %).
+
+3y169. **GRAIN: what a grain hears as the material changes under it (2026-10-16; the grain-mix session).** A grain
+reading where the head writes sees the old material become the new: overtaken by the head between two blocks (85 ..
+90 % of the cases) or reading across it inside one. Measured (`tools/grain_listen.c`, the turn of 3y168 with each TYPE
+as A): 1 400 .. 2 200 splices in 18 s; the raw step at the grain's place a median 0.5 % of the grain's level, the
+99th percentile 11 .. 32 %, at most 38 .. 109 %. Two softeners (`GRAIN_DECLICK`): **the write head's crossfade**
+(each slice's last 64 samples fade from the new material into the old ahead; the next slice writes them whole; not
+on the last slice, so the buffer stays exact) and **a grain's step ramped out** (the tick takes the samples rewritten
+since the last block; a grain whose two held samples are among them takes the new ones and carries the difference as
+an offset ramped to zero over 4 blocks, 2.9 ms, in a loop of its own where needed). Each grain's peak second
+difference a block, the spliced blocks above the clean blocks' 99.9th percentile, softened (off): PLUCK 0.25 %
+(0.90), DRONE 0.09 (1.17), BELL 1.33 (4.05), BREATH 0 (0), CHIRP 5.34 (26.7), SWEEP 1.55 (6.17), VOWEL 2.52 (8.34),
+METAL 2.70 (18.2): three to ten times fewer; what is left is a change of slope where the material changes (CHIRP's
+SEED reverses its sweep). A third buffer would have no splice at all for 32 KB of POOL (89.7 -> 99.2 %): the owner's
+fallback. **Tests** (`tests/cr_grain_test.c`, 285 200 checks): the mix (MORPH 0 = A alone with B zeroed, 127 = B alone,
+64 = the two outputs mixed sample for sample; SHP the knob's path; LFO 1 -> MORPH swings it and ramps without a jump
+at the block), the render in place (the measuring pass writes nothing; new below the head, old above; the grains
+never stop, no silent block; the buffer the whole render's for every family; the steps softened), latest wins (the
+render under way finishes, then the latest; ten changes: two renders; a knob turned on and on: renders land as the
+polls go, B's one change next). **Listening:** `build/grain-mix/` (INDEX.md): MORPH swept old and new, TONE and SEED
+turned old, new and new without the softeners, STRUM and SHIMMER old and new.
+**Checked:** `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED (23 suites, 112 s; test_cr 1086 ok, test_persist
+113, regress 317 renders with the new goldens); `BOARD=smk37 ./build.sh` XIP 541 588 B (94.4 %), RAM 81 340, POOL
+308 508; `./build.sh` last: XIP 542 764 B of 573 440 (94.7 %), RAM 80 544 (81.9 %), POOL 308 508 (89.7 %) (main
+034f2cc: 541 948, 80 368, 306 196). Not on a unit, not pushed.

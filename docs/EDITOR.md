@@ -276,8 +276,9 @@ the quick mapping says "not modulatable". Tests: `tools/emu/scripts/cr_quad.txt`
 
 A plan for OSC and ENV, the title rules for the rest (`eng_grain.c GRAIN_SCREENS`). OSC: `SRC` (lanes `SRC 1`, `SRC 2`:
 TYPE TONE MOTION SEED) and `GRAIN` (lanes `GRAIN`: SIZE DENS POS SPRD; `GRAIN+`: MORPH RAND PITCH SCAN), both under
-the **wave band** (`ENG_B_WAVE`, `cr_draw.c cr_wave_band`: the active source's envelope on SRC; both on GRAIN, A blue
-and B orange by MORPH, POS, SPRD and the live grains). FILT: `FILTER` (CUT RES FTYPE DRIVE) and `FILTER+` (KTRK) under
+the **wave band** (`ENG_B_WAVE`, `cr_draw.c cr_wave_band`: the active source's envelope on SRC; on GRAIN the mix the
+grains read, A's and B's envelopes weighted by MORPH in a colour from A's blue to B's orange (3y167), POS, SPRD and
+the live grains in one colour). FILT: `FILTER` (CUT RES FTYPE DRIVE) and `FILTER+` (KTRK) under
 the VA's filter curve. ENV: `ENV 1 · amp` (the track's ATK DEC SUS REL) and `ENV 2 · mod`, each under the AHDSR. LFO:
 the stack `LFO 1`, `LFO 2` (RATE WAVE DEPTH FADE) and `LFO SYN` (SYNC1 SYNC2; a synced RATE reads the VA's list). MOD:
 the matrix's stack of eight (SRC DST AMT, the VA's fine amounts), then EXPR. The quick mapping works (`grain_mod_dst`).

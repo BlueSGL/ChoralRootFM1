@@ -1541,9 +1541,12 @@ WHEEL has one screen in each group:
 
 New in 0.24-beta2. GRAIN plays clouds of short grains read from two sources, **A** and **B**, that it makes itself:
 each is about three quarters of a second of sound, made from four knobs whenever the sound loads or one of those
-knobs turns (a moment's work; the grains on the other source keep sounding meanwhile). A GRAIN sound stores its knobs,
-never audio. **MORPH** blends A into B grain by grain: each grain reads one of the two, MORPH sets how many read B
-(0: A alone, 127: B alone), so in between the two materials interleave rather than crossfade.
+knobs turns. The new sound is written over the old one as you turn, a little each screen frame, while the grains go on
+playing: nothing goes quiet, and turning a knob steadily moves the sound several times a second (from 0.25: until
+0.24 a source fell silent while its knobs turned). A GRAIN sound stores its knobs, never audio. **MORPH** mixes the
+two: every grain reads A and B at the same place and blends them, 0 A alone, 127 B alone, in between the two sounds
+mixed into one, which the grains then play; MORPH moves smoothly under the matrix, ENV 2 and the LFOs (until 0.24 each
+grain read one source or the other, MORPH setting how many read B).
 
 | Group | Screens |
 | --- | --- |
@@ -1572,13 +1575,15 @@ never audio. **MORPH** blends A into B grain by grain: each grain reads one of t
   DEP2, AMP) by **AMT**, -64 to +63, which moves in tenths below 6 either way and in whole steps from 6, as the VA's.
   Quick modulation works as on the VA: hold ENV or LFO and turn a knob.
 - **The wave band.** On the SRC screen it draws the active lane's source, and redraws when a turn of its knobs has
-  made it anew. On the GRAIN screen it draws both, A in blue and B in orange, each as bright as MORPH gives it; POS is a
-  white line (SCAN moves it), SPRD a green span round it, and every sounding grain a bright line of its source's
-  colour, travelling as it reads.
+  made it anew. On the GRAIN screen it draws the mix the grains read, its colour going from A's blue to B's orange as
+  MORPH (as the last note plays it, modulation included) goes from A to B; POS is a white line (SCAN moves it), SPRD a
+  green span round it, and every sounding grain a bright white line, travelling as it reads.
 - **Chord and bass share the sources.** The FM-1 holds one pair: the chord sound's when it is on GRAIN (else the bass
   sound's). With both on GRAIN the bass plays the chord sound's A and B through its own grain knobs, MORPH, filter
   and envelopes.
-- Notes are pitched from the material up to C6; above C6 they stop rising.
+- Notes are pitched from the material up to C6; above C6 they stop rising. The material is pitched at C4, a PLUCK
+  6 cents above it; the grains read at source A's pitch, so a PLUCK as B plays 6 cents sharp of A (and a PLUCK as A
+  leaves B 6 cents flat).
 
 The factory presets: CLOUD PAD, SHIMMER, BREATH PAD, FROZEN, STRUM, SWARM, ACID DUST, GLITCH. More:
 [GRAIN.md](GRAIN.md).
