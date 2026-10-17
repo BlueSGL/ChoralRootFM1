@@ -28,6 +28,20 @@ Ranked:
 Not to port: the 5 + 3 P5 split as such, streaming publication / the 12-slot queue, overlapped per-track reverbs,
 user voice weights with SAFETY OFF, and the no-fallback build. Reasons are below.
 
+## The unit's reading before item 1 (2026-10-17)
+
+`python3 tools/perf_unit.py va fm6 --seconds 20` on the owner's unit: 5BD75BE3, ChoralRoot 0.25, Dual Core On,
+reverb on core 1 since 3y50. Eight notes + bass; µs of the 2902 µs half; worst since the read before each scenario.
+
+| scenario | block | tick | part0 | part1 | fx | master | wait | t5 | wall | late | stale | shed (since power-on) | avg | p0 avg | fx avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| va: MORPH PAD + PUNCH BASS | **3256** (112 %) | 354 | **2397** | 375 | 484 | 159 | 175 | 308 | 3547 | 36 | 0 | 30 | 2079 | 1540 | 341 |
+| fm6: TINE EP + DEEP SUB | **2799** (96 %) | 424 | 1764 | 641 | 529 | 162 | 184 | 262 | 3061 | 2 | 0 | 41 (this run: 11) | 1669 | 1072 | 361 |
+
+Against 2026-10-14 (INTEGRATION.md): the fx stage is lower, as 3y50 predicted (va 611 → 484, fx avg 510 → 341).
+But part0 is no better (2293 → 2397) and the block is worse (3121 → 3256). The VA chord on core 0 is still the
+overload, and FM6 now sheds dry too. **Item 1 stands, with more need than estimated.**
+
 ## 1. The source
 
 Cloned fresh into a scratch folder (`git clone https://github.com/keremimo/melodee`). The older copy at
