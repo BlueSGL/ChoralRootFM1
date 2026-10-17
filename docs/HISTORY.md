@@ -5886,3 +5886,33 @@ build/choralroot.fwsc 0.25.1 build/scratch/site-full --smk-packages build/scratc
 landing page says New in 0.25.1 and shows `img/panel-main-fm1.png`, `webapp/smk37/` offers 0.25-smk37 first, then
 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
 orchestrator pushes main and tags v0.25.1; no SMK tag). No device.
+
+## 2026-10-17 (Bubba Machine: back to V15, and the installers tell it apart)
+
+3y176. **An FM-1 on Bubba Machine 0.8.0-beta back to the official V15, and both installers recognise Bubba Machine (the
+owner, 2026-10-17: "I flashed this firmware https://github.com/Erbubar23/bubba-machine and it softbricks the FM-1 with
+no way to go back to any other firmware", then "Please try and get my device back to V15").** Before:
+`tools/fm1_install.py --info` read `FM-1_003 [running] port: FM-1 Bubba Machine`, no unit ID, and called it "the
+official M-VAVE firmware (FM-1_003)": Bubba Machine answers the handshake as FM-1 version 3 (its `FM1_IDENT`, so that
+M-UPGRADE offers V15) and its USB product name is "FM-1 Bubba Machine". **Why nothing else installs over it**: its
+updater (`hal/fm1/fm1_update.c` there) speaks M-VAVE's protocol but takes only a package whose update loader is M-VAVE's
+own (`usb_hid_ota.bin`: header CRC 0xEBAA, data CRC 0x5881, 0x4DE1 bytes, load address 0x01C0A800) and whose `flash.bin`
+head 0x0000..0x3FFF equals the unit's; every Felucca-family package (ChoralRoot's included) carries the Felucca loader,
+so Bubba refuses it after the first reads, erases its staging area and writes nothing. **Back to V15**: `caffeinate
+-dimsu python3 tools/fm1_install.py MvaveFM1Unbricker/FM-1.fwsc --yes` (M-VAVE's file, sha256
+db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a): 74 reads (the header, the loader, the head),
+"switching to update mode", M-VAVE's loader wrote it, "done: the FM-1 runs FM-1_015", exit 0; `--info` after: `FM-1_015
+[running] port: FM-1`. No backup was possible (Bubba Machine has no backup protocol). Which physical unit it was cannot
+be told from here (no unit ID on Bubba or on stock). Bubba's own data stays in the settings area: V15 may read it as
+garbled presets (System > Reset Patches; MvaveFM1Unbricker `repair-settings`). **The installers**:
+`classify_firmware(identity, info, port)` and `classifyFirmware(identity, info, port)` (web/fm1ota.js) take the MIDI
+port's name; a port named "...Bubba..." on an FM-1 identity is kind `bubba`, "Bubba Machine (FM-1_003)", refused, also
+with `--force` and with the page's override (the override box is not offered: Bubba's updater would refuse the package
+anyway), and the text says the way out: the official V15 with this tool, the page's "Return to official V15" or Bubba's
+own installer, then ChoralRoot. `--info` names it and prints the same. FM-1_003 on the FM-1's own port is still the
+stock firmware. The return to V15 stays allowed over anything. docs/INSTALL-COMPAT.md: the policy's row and a "Bubba
+Machine" section; README's "Over which firmware". **Tests**: tests/install_test.py (seven port cases; installs over
+Bubba with and without `--force` refused, exit 8, no upgrade sent; FM-1_003 on the port "FM-1" installed; `--info`; the
+port cases against fm1ota.js); web/test_installer.mjs (`FakeFM1` takes a port name; the page over Bubba refuses with the
+text and no override box, the override ticked still refuses, "What is on my FM-1?" names it; FM-1_003 on "FM-1"
+installs). `CR_VERSION=0.25.1 sh tests/run_all.sh` ALL SUITES PASSED (23 suites). Not pushed.
