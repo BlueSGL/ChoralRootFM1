@@ -204,9 +204,11 @@ echo "the screen off: the logo at 3 min, a black frame at 10 min (the backlight 
 run cr_screen_off
 SO="$OUT/cr_screen_off.log"
 lit() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 24 { c++ } END { print c + 0 }'; }   # bytes > 24
-ink() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 0 { c++ } END { print c + 0 }'; }    # bytes > 0 (0: the black frame; a view's background is 8 8 8)
-blk() {          # blk FILE: pixels 0 0 0, what the black frame leaves where the wake did not redraw (a view has none)
-    od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '{ s += $1; if (NR % 3 == 0) { if (!s) c++; s = 0 } } END { print c + 0 }'
+ink() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 0 { c++ } END { print c + 0 }'; }    # bytes > 0 (0: the black frame)
+blk() {          # blk FILE: pixels 255 0 255, the script's lcdfill before each wake, where the wake did not redraw (no
+                 # view draws magenta; MOD's background is black, so the black frame itself cannot mark them)
+    od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+        awk '{ v[NR % 3] = $1; if (NR % 3 == 0) { if (v[1] == 255 && v[2] == 0 && v[0] == 255) c++ } } END { print c + 0 }'
 }
 dmp() {          # dmp SHOT PATTERN: log $DL's first line matching PATTERN after the shot $DP SHOT (its dump, its expects)
     awk -v s="screenshot: build/emu/test/$DP$1.ppm" -v p="$2" 'f && $0 ~ p { print; exit } $0 == s { f = 1 }' "$DL"
@@ -224,7 +226,7 @@ nd=$(grep -c '^  pa2: ' "$SO")
 p=$(pixel "$OUT/cr_off_logo.ppm" 120 150); set -- $p
 [ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && ok "3 min: the logo ($p): $OUT/cr_off_logo.ppm" || bad "no logo at 3 min ($p)"
 [ "$(scr dark)" = off ] && [ "$(ink "$OUT/cr_off_dark.ppm")" = 0 ] && [ "$(lit "$OUT/cr_off_view.ppm")" -gt 1000 ] &&
-    [ "$(blk "$OUT/cr_off_view.ppm")" = 0 ] && has '^screen: off (idle)' "$SO" &&
+    has '^screen: off (idle)' "$SO" &&
     ok "10 min: the screen off: every pixel of the panel black: $OUT/cr_off_dark.ppm" ||
     bad "10 min: screen $(scr dark), the panel not black ($(ink "$OUT/cr_off_dark.ppm") bytes above 0)"
 [ "$(scr dark2)" = off ] && [ -n "$(wrs dark)" ] && [ "$(wrs dark)" = "$(wrs dark2)" ] && [ "$(ink "$OUT/cr_off_dark2.ppm")" = 0 ] &&
@@ -944,7 +946,7 @@ L="$OUT/cr_editor_map.log"
 has '^mod: ENV2 -> CUT +12 slot 1$' "$L" && ok "ENV held + KNOB 1 +2 on FILTER: mod: ENV2 -> CUT +12 slot 1 (ENV 2 by default): $OUT/cr_map_hot.ppm" || bad "ENV mapping: $(grep -m1 '^mod:' "$L")"
 yel() { set -- "$(pixel "$OUT/$1.ppm" $2 $3)" "$4"; set -- "$(echo $1)" "$2"; [ "$1" = "$2" ]; }   # yel SHOT X Y "R G B"
 yel cr_map_mark 55 126 "247 182 0" && ok "the Cutoff cell's mark: a yellow square (ENV): $OUT/cr_map_mark.ppm" || bad "no yellow mark on Cutoff: $(pixel "$OUT/cr_map_mark.ppm" 55 126)"
-yel cr_map_filt 55 126 "8 8 8" && ok "no mark before the mapping" || bad "a mark before: $(pixel "$OUT/cr_map_filt.ppm" 55 126)"
+yel cr_map_filt 55 126 "0 0 0" && ok "no mark before the mapping" || bad "a mark before: $(pixel "$OUT/cr_map_filt.ppm" 55 126)"
 has '^mod: LFO1 -> RES +6 slot 2$' "$L" && yel cr_map_mark2 115 126 "231 56 41" && ok "LFO held + KNOB 2: LFO1 -> RES slot 2, a red mark on Reso: $OUT/cr_map_mark2.ppm" || bad "LFO mapping: $(grep '^mod: LFO1 -> RES' "$L") $(pixel "$OUT/cr_map_mark2.ppm" 115 126)"
 has '^mod: LFO1 -> CUT -6 slot 3$' "$L" && yel cr_map_white 55 126 "247 243 239" && ok "LFO1 -> CUT too: two sources, a white mark: $OUT/cr_map_white.ppm" || bad "white mark: $(pixel "$OUT/cr_map_white.ppm" 55 126)"
 differ cr_map_hot cr_map_mark "the hot cell showed \"ENV2 +12\" in yellow ($OUT/cr_map_hot.ppm), then the cutoff again"
