@@ -223,6 +223,8 @@ surveyed). It has no VA engine.
 
 ### 1. The VA chord's voices on both cores (then FM6)
 
+*Built (the VA) in HISTORY 3y177 (docs/DUALCORE.md "The VA's chord on both cores"); not yet measured on the unit.*
+
 *Brief.* Generalise 3y46's P5 split (`voice.c` `p5x` list, `fx.c p5x_run` / `p5x_assign`) from `P5_IS(t0)` to an
 engine flag, `engine_t.split`, set for the VA first. Keep **our** protocol: core 0 prepares every voice before the
 one hand-over, `c1_part1_job` renders the bass part and then core 1's share of the list, core 0 renders the rest,

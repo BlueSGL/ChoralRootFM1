@@ -176,9 +176,10 @@ static uint8_t cr_c1_test_hang;      /* tests: the next jobs never answer (cr_c1
 static uint8_t cr_c1_test_nostart;   /* tests: core 1 does not answer at start */
 static uint8_t cr_c1_test_late;      /* tests: the job runs at the wait (after part 0), not when handed (before it) */
 static uint32_t cr_c1_test_rejected; /* tests: core 1's misread count (the device's fm1_c1_rejected) */
-static uint8_t cr_c1_test_nosplit;   /* tests (3y46): P5's chord voices are not shared out: all in track_render_x, in
-                                      * their order, on core 0 (the reference the split's sum must equal) */
-static uint8_t cr_c1_test_share;     /* tests: k + 1: core 1 takes k of the chord part's P5 voices (all there are, if
+static uint8_t cr_c1_test_nosplit;   /* tests (3y46, 3y177): the chord voices of P5 or the VA are not shared out: all
+                                      * in track_render_x, in their order, on core 0 (the reference the split's sum
+                                      * must equal) */
+static uint8_t cr_c1_test_share;     /* tests: k + 1: core 1 takes k of the chord part's voices (all there are, if
                                       * fewer), whatever the balance says: any split gives the same samples */
 #define CR_C1_TEST_NOSPLIT cr_c1_test_nosplit
 #define CR_C1_TEST_SHARE cr_c1_test_share

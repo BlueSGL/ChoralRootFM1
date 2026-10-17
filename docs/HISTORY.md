@@ -5886,3 +5886,50 @@ build/choralroot.fwsc 0.25.1 build/scratch/site-full --smk-packages build/scratc
 landing page says New in 0.25.1 and shows `img/panel-main-fm1.png`, `webapp/smk37/` offers 0.25-smk37 first, then
 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
 orchestrator pushes main and tags v0.25.1; no SMK tag). No device.
+
+## 2026-10-17 (the VA chord's voices on both cores)
+
+3y177. **The VA chord's voices on both cores, as P5's since 3y46 (item 1 of docs/notes/melodee-p5-dualcore-review.md,
+the review of Kerem Kilic's nightly dual-core scheduling for Melodee; the ideas alone, no code taken).** The unit's
+heaviest case was a VA chord rendered whole on core 0: MORPH PAD, 8 notes, over PUNCH BASS, part0 2293 us and a block
+of 3121 of 2902 (108 %, +26 voices shed in 20 s) while core 1 waited after its 355 us bass (docs/INTEGRATION.md
+"Measured on the unit"). `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
+(`VA_VOICE_US` 280, the unit's row / 8), 0 for the rest; `fx.c mix_parts_split` splits the chord part when its engine
+has it (was `P5_IS(t0)`). The protocol is 3y46's, unchanged: core 0 prepares every voice before the ONE hand-over
+(`voice.c track_render_x`, the `p5x` list), `c1_part1_job` renders the bass part and then core 1's share, now through
+the engine's `render2` / `render`, core 0 renders the rest, waits, adds; core 1 not answering, refusing or given up:
+core 0 runs the same job itself (DUALCORE.md "Reliability", "The persistent fallback" as they were). Melodee's
+streaming queue is not taken. **The side**: the VA's `render2` (SPREAD, USPREAD) on core 1 adds into `p5x_side` (128 B
+of POOL) and sets `p5x_side_on`; core 0 adds it into the part's side after the wait as it adds `p5x_buf` into the mid
+(`p5x_run` takes `side`, `side_on`). **The weights** (`p5x_assign(t0, ..)`): a chord voice its engine's weight, the
+bass as before (P5 voices 440, another engine 75 a unit), core 0's side x 1.07 (`P5X_C0_PCT`, TIMER5's ticks nested in
+core 0's audio ISR: Melodee's "CPU0 service allowance", the idea), the four a core and `P5_FILL_C1_FIRST` P5's alone.
+VA over a sounding MONO bass (core 0 + core 1): 8 voices 4 + 4, 7 4 + 3, 6 3 + 3, 5 3 + 2; over a P5 stack of four 7 +
+1. For P5 the factor changes no split with a MONO or a P5 bass; it moves one voice to core 1 for a 2-, 4- or 6-voice
+chord over a POLY bass of another engine of three voices (or six, seven of one unit): the samples are the same. P5's
+78 PEAK counts stay P5's (a VA chord over a P5 bass counts the bass, as `p5x_bass_count` did). **The audit**
+(docs/VA.md "Two cores", as PROPHET.md's for P5): `va_render` writes its own `va_vs[part][voice]` and `voice_t` (the
+noise seeds are per voice, `s[2]`; BROWN / VINYL's state in `nz`), the buffers it is given, and from the latest
+note's voice alone `va_pan_off` / `va_rate_off` (one writer, read on core 0 after the join); it reads `va_lfo`
+(`va_block`'s, before the hand-over) and the patch; its callees are pure. Core 1's stack: `c1_part1_job` 68 B ->
+`va_render` 844 B, shallower than a VA bass's path through `track_render_x` (212 B). **`CR_RAM_VA=1` did not link**
+(since GRAIN shares `va_fweights`, 3y118, it is called out of line: "relocation truncated to fit"): a veneer in
+`cr_ram.c`; `ram_code.py cmp` 4 moved, 0 functions differ, veneers `memset` and `va_fweights`, RAMTEXT 16 120 of 24 576.
+Size (default): XIP 543 244 B (+416, 94.7 %), RAM 80 544 (+0), POOL 308 636 (+128). **Tests**: `tests/cr_c1_thread_test.c`
+19 pairs (+4: VA chord over FM6, CZ-1, MORPH PAD over PUNCH BASS with core 1's SPREAD side in 1463 of 3000 blocks, a
+UNISON chord with USPREAD); for the six VA-chord pairs inline = thread = unsplit = all to core 1 = none, every sample,
+each core rendering chord voices (at most four each over a VA, FM6 or CZ-1 bass; seven on core 0 over a P5 stack); ThreadSanitizer 0 reports over 19 pairs, the planted word still
+reported. test_cr.sh `cr_va_eight` (new script: MORPH PAD, eight MIDI notes, PUNCH BASS, a chord change): eight voices
+and the bass, inline = `EMU_C1=thread` bit for bit, `EMU_C1=nostart` the chord seven under the bass (one core's
+budget), `EMU_C1=hang` one core's WAV for the first 7.9 s and Dual Core Off; the emulator's stages (device us a half,
+avg / max) part0 613 / 1335 and part1 31 / 152 before, 332 / 746 and 330 / 792 after, the WAV the same as before bit
+for bit. `tools/perf_unit.py`: a third table, "cores" (78 PEAK's `pk_c0_busy_us`, `pk_c1_busy_us`, `pk_c0_wait_us`,
+`pk_fx_join_us`, `pk_c1_idle_us`). **Checked**: `sh tests/run_all.sh` 23 suites, every one PASS but test_cr's new hang
+check on the first run (its `c1 gave up` is printed with EMU_STAGES only: set), then test_cr.sh alone 1092 ok, 0 FAIL;
+317 golden renders, 0 changed; 0 lint. **For the owner's unit** (not run): `build/scratch/va-split/` in this worktree,
+package A (the default build) sha256 d2f42420dd0b735b3a19808b3c9e7e65520b610199f5a52c62b84550394ed7b5 and B (`CR_RAM_VA=1`)
+3d13fb10307b0baae1fb1ff978e78bcda73297edf5ed644ded5ccf3b13f63ed2, 610 313 B each, with README.txt's plan: `perf_unit.py
+va fm6 --seconds 20` dry and `--record` on 0.25 first, a backup, A, B (power-cycle and `--debug` once after each), back
+to the release. Expected (estimates): part0 about 1250 .. 1450, part1 about 1300 .. 1500 (core 1 the longer side), the
+block about 2400 .. 2600 instead of 3121, no shed dry; fm6 unchanged (the control). Next: FM6's chord (a third
+`fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.
