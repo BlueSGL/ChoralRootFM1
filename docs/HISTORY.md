@@ -5833,3 +5833,22 @@ the keybed figure redrawn for FM-1 (roots C4 .. G5, a SUS pill over G#3 + A#3; w
 text, LOCK, the secret chords, the LFO row of the button table. docs/releases/0.26.md started with the player-facing
 note ("FM-1 is now the chord key layout: your FM-1 switches to it once when you update; Classic is in Options > Chord
 Keys"), what the switch keeps, LOCK, Classic, going back. Not released, not pushed. No device.
+
+3y174. **0.25 on the unit (2026-10-16, late evening; the flash-025 session).** The owner: "I am done filming flash
+away as you please". Before, unit 5BD75BE3 ran the GRAIN mix build of 7dff15b (package sha256
+220e49d983ebe20497b1ee02d8321ced91d21a6dc3f74fc7ad4645465f876430, the code of 0.25 under the label "ChoralRoot 0.24").
+The package from the GitHub release v0.25 itself (curl into a new folder `build/flash-0.25/`): `choralroot-0.25.fwsc`
+610 313 B, sha256 98857bf74fdf65eb680d3737e5346747b06b6df7e2e446acd04577f209f02d4e, the same as 3y170's build and
+`web/releases.json`. Before: no other session on the unit (no `fm1_install.py`, `uac_check.py` or `perf_unit.py`
+running), the Mac kept awake (`caffeinate -dimsu`), the FM-1 on the Mac's USB (it answers `--info`, so it counts as
+powered). `python3 tools/fm1_install.py --info`: one FM-1, `FM-1_920 [running] port: ChoralRoot FM-1 version:
+ChoralRoot 0.24`, unit ID 5BD75BE3. A full backup first: `fm1-backups/fm1-backup-2026-10-17-before-0.25.json` (in
+`/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/fm1-backups/`, 69 591 B): settings, the legacy banks, user sounds
+001..128 in 13 groups (objects 50..62), the favourites (23), the ten loop slots' objects (40..49, slot 1 recorded):
+the same 34 objects as the backup before the GRAIN mix flash, every sound group and the favourites with its CRCs; the
+settings and loop slot 1 (52 -> 80 B, recorded since, the filming) differ. Flashed: `caffeinate -dimsu python3
+tools/fm1_install.py build/flash-0.25/choralroot-0.25.fwsc --unit 5BD75BE3 --yes`: "done: the FM-1 runs FM-1_920",
+"unit ID 5BD75BE3: the same FM-1 after the restart". After: `--info` `FM-1_920 [running] port: ChoralRoot FM-1
+version: ChoralRoot 0.25`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.25 (83 hold a sound), U033
+DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0, boot stub v3 "booted the app
+after 64.0 ms; marker ok". Not pushed.
