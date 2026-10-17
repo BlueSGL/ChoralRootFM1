@@ -11,7 +11,7 @@ and M-VAVE.
 **The manual:** [docs/MANUAL.md](docs/MANUAL.md) (the first five minutes, every button, knob and Options entry, the
 looper, the sound editor, MIDI and USB, updating and recovery, a quick-reference table).
 
-**M-Vave SMK-37:** a community test build of 0.24-beta2 (genkigenki's port; community-tested, not tested by the maintainer): see [SMK-37 instructions](SMK37.md).
+**M-Vave SMK-37:** a community test build of 0.25 (genkigenki's port; community-tested, not tested by the maintainer): see [SMK-37 instructions](SMK37.md).
 
 ## Install
 
@@ -136,6 +136,13 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.25** ([docs/releases/0.25.md](docs/releases/0.25.md)): GRAIN's MORPH blends sources A and B into one
+  sound the grains play, smoothly under ENV 2, the LFOs and the matrix; TONE, MOTION, SEED and TYPE change a source as
+  they turn, the grains playing on.
+- **New in 0.24** ([docs/releases/0.24.md](docs/releases/0.24.md)): Options > Chord Keys FM-1, a chord layout for the
+  FM-1's keybed (SUS from G#3 + A#3, LOCK on LFO) with the SUS Window; MIDI Keys; shortcuts and the voicing on the
+  Full keyboard; GRAIN, a seventh engine; velocity on all 27 keys and Vel + Poly AT; SAFE MODE's Flash Data clears the
+  saved sounds.
 - **New in 0.23** ([docs/releases/0.23.md](docs/releases/0.23.md)): FM TONE at the other engines' level and without
   pops on its voices; Options > Velocity Curve; Solfège numerals in Key Mode; the device manager places sounds next to
   one saved on another build.

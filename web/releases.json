@@ -8,6 +8,25 @@
   },
   "releases": [
     {
+      "version": "0.25",
+      "date": "2026-10-16",
+      "tag": "v0.25",
+      "sha256": "98857bf74fdf65eb680d3737e5346747b06b6df7e2e446acd04577f209f02d4e",
+      "sha256_1core": "28e54b32969700e80f9628d2ebf2eba943b42794538d6696bc975c494e618b78",
+      "title": "GRAIN: MORPH blends the sources, knobs that change the sound as you turn",
+      "bullets": [
+        "GRAIN's MORPH now blends sources A and B into one sound the grains play: 0 is A, 127 is B, and in between the two mixed together.",
+        "MORPH moves smoothly when ENV 2, an LFO or the matrix modulates it: an LFO breathes between the two sources, ENV 2 turns one into the other during a note.",
+        "Turning TONE, MOTION, SEED or TYPE changes a source as you turn, while the grains keep playing: no more silence while a source is rebuilt.",
+        "The GRAIN screen's wave band draws the blend of A and B as MORPH weighs them.",
+        "GRAIN sounds that use MORPH sound different from 0.24: seven of the eight presets (STRUM and SHIMMER the most; FROZEN is unchanged) and your own sounds with MORPH between the ends or modulated."
+      ],
+      "notes": [
+        "Updating from 0.24 keeps your settings, sounds, loops and favorites; nothing outside GRAIN changes.",
+        "GRAIN takes a few percent more of the processor than in 0.24."
+      ]
+    },
+    {
       "version": "0.24",
       "date": "2026-10-16",
       "tag": "v0.24",
@@ -27,7 +46,14 @@
       "notes": [
         "Updating from 0.24-beta3, beta2, beta1 or 0.23 keeps your settings, sounds, loops and favorites; the chord keys stay Classic until you choose FM-1.",
         "With Key Touch on, notes sound a few milliseconds later than in 0.23 (the keys wait for their velocity); with Key Touch at Fixed, the default, nothing changes."
-      ]
+      ],
+      "going_back": {
+        "short": "Your settings, sounds, loops and favorites stay, and saved GRAIN sounds load with the same knobs. GRAIN's MORPH acts as it did in 0.24.",
+        "points": [
+          "0.25 stores sounds exactly as 0.24 does: every sound, GRAIN's included, loads on 0.24 as it was saved.",
+          "On 0.24 each grain reads source A or B and MORPH sets how many read B, so a GRAIN sound with MORPH between the ends plays the alternating grains again, and a source falls quiet while its knobs turn. Back on 0.25 it plays the blend again."
+        ]
+      }
     },
     {
       "version": "0.24-beta3",

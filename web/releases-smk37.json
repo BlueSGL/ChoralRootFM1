@@ -3,6 +3,40 @@
   "repo": "https://github.com/Quixotic7/ChoralRootFM1",
   "releases": [
     {
+      "version": "0.25-smk37",
+      "base": "0.25",
+      "date": "2026-10-16",
+      "tag": "v0.25-smk37",
+      "title": "ChoralRoot 0.25 on the SMK-37: GRAIN's MORPH blends the sources",
+      "bullets": [
+        "ChoralRoot 0.25 on the M-Vave SMK-37 Pro, SMK-37 Elite, MKE-P37 and Starrykey 37 Play, with everything of 0.24-beta3-smk37.1 (the stock mapping's fix among it).",
+        "GRAIN's MORPH now blends sources A and B into one sound the grains play, smoothly also when ENV 2, an LFO or the matrix moves it.",
+        "Turning a GRAIN source's TONE, MOTION, SEED or TYPE changes the sound as you turn, with no silence while it is rebuilt.",
+        "GRAIN sounds that use MORPH sound different from 0.24-beta3-smk37.1: seven of the eight presets (FROZEN is unchanged) and your own sounds with MORPH between the ends or modulated.",
+        "The FM-1's own chord layout options of 0.24 (Chord Keys, SUS Window, Full K Shorts, MIDI Keys) are hidden here: the chord block stays on the pads.",
+        "genkigenki's port (the fm1-to-smk37 guide), built from the FM-1's 0.25."
+      ],
+      "notes": [
+        "Community-tested, not tested by the maintainer: please report what works and what does not on GitHub.",
+        "Updating from 0.24-beta3-smk37.1, 0.24-beta3-smk37 or 0.24-beta2-smk37 keeps your settings, sounds, loops and favourites; saved sounds keep their format.",
+        "Going back: M-Vave's package for your model with M-UPGRADE. Going back to 0.24-beta3-smk37.1 keeps your sounds; GRAIN's MORPH acts as before there."
+      ],
+      "packages": {
+        "pro": {
+          "sha256": "730dd7beac70f6ec829ae79c06dcc32ca49c8e395516539a4efb37560d0f5c5e",
+          "sha256_1core": "3983ed45dc6046c31fe40f926a6fc7dd4433f9581ed6d385f566c6fd7e8e338c"
+        },
+        "elite": {
+          "sha256": "981ba44916e9fc04208ae439264406e1f62cc6805d8f22715c9de874483e6eaa",
+          "sha256_1core": "5affd337ab02bec98c25ad092deb0edb9b4491ca94665b3d993f9bc1c971f8a0"
+        },
+        "mke": {
+          "sha256": "0fae0a345b368499d963a38afdae6f40d0ddc18c1287e1cb71947912616dd2c5",
+          "sha256_1core": "295b7ae9bc71198b7c316062fcdc2cd93dc055fd3da27a01c3ff13c2bb16a724"
+        }
+      }
+    },
+    {
       "version": "0.24-beta3-smk37.1",
       "base": "0.24-beta3",
       "date": "2026-10-16",

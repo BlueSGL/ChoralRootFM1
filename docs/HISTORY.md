@@ -5722,3 +5722,45 @@ turned old, new and new without the softeners, STRUM and SHIMMER old and new.
 113, regress 317 renders with the new goldens); `BOARD=smk37 ./build.sh` XIP 541 588 B (94.4 %), RAM 81 340, POOL
 308 508; `./build.sh` last: XIP 542 764 B of 573 440 (94.7 %), RAM 80 544 (81.9 %), POOL 308 508 (89.7 %) (main
 034f2cc: 541 948, 80 368, 306 196). Not on a unit, not pushed.
+
+3y170. **0.25, the release, and 0.25-smk37 (2026-10-16; the owner, after playing 3y167 .. 3y169 on the unit: "Holy
+smooleys Batman, this is so much better! Lets get this all merged in and released!", then "Release it as v0.25
+(stable), with an SMK-37 build v0.25-smk37 too").** The tree: main 7dff15b (0.24 + the flash record 3y166 + the GRAIN
+mix 3y167 .. 3y169). `FELUCCA_VERSION` "ChoralRoot 0.25". `docs/releases/0.25.md` the release's notes (GRAIN: MORPH a
+blend of A and B, smooth under ENV 2 / the LFOs / the matrix / SHP, the source knobs changing the sound as they turn,
+the wave band's blend, a few percent more CPU; what sounds different: every GRAIN sound with MORPH between the ends or
+modulated, seven of the eight presets: MORPH is 40 or 64 on CLOUD PAD, BREATH PAD, SWARM, ACID DUST and GLITCH, LFO 1
+on SHIMMER's, ENV 2 on STRUM's, and only FROZEN is at 0 with nothing on it, the goldens' 7 of 8; B at A's root;
+Installing; Going back to 0.24). **Going back, checked**: 3y167 .. 3y169 touch `eng_grain.c`, `grain_src.c`,
+`cr_draw.c`, `cr_edit.c` and the wave band's `cr_wave_t` in `core.h` (screen data), no stored format: the GRAIN
+patch's values, ranges, defaults and the presets' lists are the same bytes, upool / cr_bank / cr_backup untouched; so a
+sound saved on 0.25 loads on 0.24 with the same knobs and plays 0.24's MORPH (the grain share) there.
+`web/releases.json`: 0.25 first, stable, 5 bullets, 2 notes; 0.24 gets its going-back note. `web/releases-smk37.json`:
+0.25-smk37 first (base 0.25, tag v0.25-smk37, 6 bullets, 3 notes). SMK37.md at 0.25-smk37 (the status, the packages,
+the version a player sees, the install command, the release commands, What to test: the first start's splash and
+GRAIN's knobs turned under a chord); the "Options > Version cuts its end off" note goes (28 characters for
+`ChoralRoot 0.25-smk37 1-core`). README: "New in 0.25" and the missing "New in 0.24", its SMK-37 line at 0.25; the
+manual's first line at 0.25. HANDOFF's state, the tags, the size paragraph.
+**Built**: `./build.sh --release 0.25` twice (the first folder moved to `build/release-0.25.first`), the same
+SHA256SUMS: `choralroot-0.25.fwsc` 98857bf74fdf65eb680d3737e5346747b06b6df7e2e446acd04577f209f02d4e,
+`choralroot-0.25-1core.fwsc` 28e54b32969700e80f9628d2ebf2eba943b42794538d6696bc975c494e618b78 (610 313 B each); size
+XIP 542 764 B of 573 440 (94.7 %), RAM 80 544 (81.9 %), POOL 308 508 (89.7 %); the single-core XIP 539 688, RAM 77 420,
+POOL 308 380. The dev build of this tree is the release package byte for byte (98857bf7...).
+`BOARD=smk37 [MODEL=elite|mke] ./build.sh --release 0.25-smk37` twice (the first folder `build/release-smk37.first`),
+the same SHA256SUMS: Pro `choralroot-0.25-smk37.fwsc` 730dd7beac70f6ec829ae79c06dcc32ca49c8e395516539a4efb37560d0f5c5e,
+`-1core` 3983ed45dc6046c31fe40f926a6fc7dd4433f9581ed6d385f566c6fd7e8e338c; Elite `-elite`
+981ba44916e9fc04208ae439264406e1f62cc6805d8f22715c9de874483e6eaa, `-elite-1core`
+5affd337ab02bec98c25ad092deb0edb9b4491ca94665b3d993f9bc1c971f8a0; MKE-P37 `-mke`
+0fae0a345b368499d963a38afdae6f40d0ddc18c1287e1cb71947912616dd2c5, `-mke-1core`
+295b7ae9bc71198b7c316062fcdc2cd93dc055fd3da27a01c3ff13c2bb16a724 (651 496 / 651 500 / 651 492 B); XIP 541 588 B
+(94.4 %), RAM 81 340, POOL 308 508; the single-core XIP 538 960. **Checked**: `CR_VERSION=0.25 sh tests/run_all.sh`
+ALL SUITES PASSED (23 suites, 117 s; test_cr 1086 ok, test_persist 113, test_retired 18, test_pool 7; 317 golden
+renders, 0 changed; 0 lint; the browser emulators as `ChoralRoot 0.25` and `ChoralRoot 0.25-smk37`, `test_web_emu`
+bit-exact and `test_web_emu_smk` PASS); `CR_PACKAGES_DIR=build/release-0.25 python3 tests/releases_test.py` ALL OK
+(0.25's two packages and the six SMK ones at their listed sha256s); site_test (in run_tests) site ALL OK with all 28
+listed FM-1 packages in `build/scratch/packages` ("make_site.py --require-all builds the site for 0.25", "New in 0.25"
+with its bullets); `web/make_site.py build/choralroot.fwsc 0.25 build/scratch/site-full --smk-packages
+build/scratch/smk-packages --require-all` with the 24 real SMK packages: `webapp/smk37/` offers 0.25-smk37 first, then
+0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
+orchestrator pushes main and tags v0.25, then v0.25-smk37: pages.yml fails while web/releases-smk37.json lists a
+release that does not exist yet). No device.
