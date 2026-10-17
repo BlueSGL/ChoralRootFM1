@@ -45,12 +45,23 @@ static uint32_t st_near, st_prog_us;
 #ifndef ST_NEAR_NOW
 #define ST_NEAR_NOW() 0                           /* (choralroot.c: cr_ui.c cr_erase_near) */
 #endif
+#if BOARD_SMK37
+static void st_stock_release(void);             /* storage.c: the stock mapping's end marker */
+static int st_in_usrflash(uint32_t off);
+#endif
 static int st_erase(uint32_t off)
 {
     uint32_t took, f;
     int rc;
+#if BOARD_SMK37
+    if (!FL_STORE_OK(off, 0x1000u) && !FL_STOCKTAG_OK(off, 0x1000u))
+        return -8;
+    if (st_in_usrflash(off))
+        st_stock_release();                     /* before the first erase in USRFLASH: see storage.c */
+#else
     if (!FL_STORE_OK(off, 0x1000u))
         return -8;
+#endif
     st_erases++;
     st_holes += (uint32_t)audio_loud();
     if (st_auto && ST_NEAR_NOW())
@@ -66,6 +77,10 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
     const uint8_t *p = src;
     if (!FL_STORE_OK(off, n))                   /* only inside the storage areas */
         return -8;
+#if BOARD_SMK37
+    if (st_in_usrflash(off))
+        st_stock_release();                     /* a sector the stock layout leaves erased is written unerased */
+#endif
     while (n) {                                 /* (fm1_flash.h fl_write, with the chip's time kept) */
         uint32_t chunk = 256u - (off & 0xFFu), took = 0, f;
         int rc;

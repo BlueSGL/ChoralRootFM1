@@ -115,8 +115,10 @@ SMK-37 model (one hardware); install your own model's, so M-Vave's updater still
 install that was interrupted resumes: switch the keyboard on (or hold OCTAVE- while switching on) and run the install
 again. The project's main web installer offers FM-1 releases only.
 
-**The first start** clears the stock firmware's settings and any other firmware's data in ChoralRoot's flash areas (the
-store's owner tag, [Storage](#storage)); this takes a few seconds once. A unit that ran genkigenki's earlier ChoralRoot
+**The first start** clears any other firmware's data in ChoralRoot's flash areas (the store's owner tag,
+[Storage](#storage)); this takes a few seconds once. The stock firmware's key, knob and fader mapping in USRFLASH is
+kept until ChoralRoot first writes there; just before that write ChoralRoot erases the stock firmware's end marker
+(the sector 0xEA000), so after a return to the stock firmware it rebuilds its factory mapping. A unit that ran genkigenki's earlier ChoralRoot
 build for the SMK-37 keeps its data: its sounds move into 0.24's sound pool, as on an FM-1 updated from 0.21, and a
 Velocity of `keys` becomes Key Touch `Dynamic`.
 
@@ -124,7 +126,9 @@ Velocity of `keys` becomes Key Touch `Dynamic`.
 
 Install M-Vave's firmware package for your model with M-Vave's updater, M-UPGRADE. It works directly, because the
 installed package keeps the keyboard's model name. The keyboard's calibration (USRTRIM, the factory key, pad and wheel
-curves), Bluetooth pairing and key areas are never written by ChoralRoot, so they are as they were.
+curves), Bluetooth pairing and key areas are never written by ChoralRoot, so they are as they were. The key, knob
+and fader mapping is the one the stock firmware had, or its factory one once ChoralRoot has stored something in
+USRFLASH (the stock firmware rebuilds it at its first start).
 
 Going back to genkigenki's earlier ChoralRoot build (0.22) works too: it finds the sounds it had, but not the ones saved
 on 0.24 (they are in the sound pool, which it does not know).
@@ -134,7 +138,11 @@ on 0.24 (they are in the sound pool, which it does not know).
 ChoralRoot writes only inside its own windows of the SMK-37's flash (`firmware/hal/fm1_flash_map.h`), and the flash
 driver checks every erase and write against them and against the protected ranges a second time. What 0.22 stored keeps
 the places of genkigenki's port; 0.24's favourites and sound pool take what was free, and the pool needs 7 sectors past
-the port's USRFLASH window: the stock USRFLASH's last sector (0xEA000) and the unlisted flash after it.
+the port's USRFLASH window: the unlisted flash after the stock USRFLASH. The stock USRFLASH's last sector (0xEA000)
+holds the stock firmware's end marker (`usrdata` at 0xEAFF8): ChoralRoot only ever erases that sector, once, before
+its first write into USRFLASH, or at a start that finds the marker over anything but the intact stock mapping. A
+pool sector that 0.24-beta2-smk37 or 0.24-beta3-smk37 kept there (their pool began at 0xEA000) moves to 0xF1000 at
+the first start.
 
 | Flash | What | Window |
 | --- | --- | --- |
@@ -154,8 +162,9 @@ the port's USRFLASH window: the stock USRFLASH's last sector (0xEA000) and the u
 | 0xC2000-0xD1FFF | the eight CZ-1 banks | FL_SMP |
 | 0xD2000-0xE5FFF | the ten loop slots | FL_SMP |
 | 0xE6000-0xE9FFF | the sound pool, sectors 5..8 | FL_SMP |
-| 0xEA000-0xF0FFF | the sound pool, sectors 9..15 | FL_TAIL |
-| 0xF1000-0xF3FFF | free | not written |
+| 0xEA000-0xEAFFF | the stock firmware's end marker | erased only (FL_STOCKTAG) |
+| 0xEB000-0xF1FFF | the sound pool, sectors 9..15 | FL_TAIL |
+| 0xF2000-0xF3FFF | free | not written |
 | 0xF4000-0xFDFFF | USR (the stock resources) | never |
 | 0xFE000-0xFEFFF | free | not written |
 | 0xFF000-0xFFFFF | key_mac | never |
@@ -169,9 +178,10 @@ protected ranges, and that no two share a sector.
 
 - Have M-Vave's stock package for your model and M-UPGRADE ready before you install.
 - Keep the USB cable connected until the install has finished and the keyboard has restarted.
-- ChoralRoot keeps its data apart from other firmwares' (its own data family): the first start clears the stock
-  firmware's settings and any other firmware's data in ChoralRoot's areas, including 0xEA000-0xF0FFF: USRFLASH's
-  last sector and flash that the stock firmware's region table does not list (nothing protected).
+- ChoralRoot keeps its data apart from other firmwares' (its own data family): the first start clears any other
+  firmware's data in ChoralRoot's areas, including 0xEB000-0xF1FFF, flash that the stock firmware's region table does
+  not list (nothing protected). An intact stock mapping in USRFLASH is kept; the stock firmware's end marker at
+  0xEA000 is erased before ChoralRoot's first write there, so the stock firmware rebuilds its factory mapping.
 - The firmware never writes the keyboard's calibration, Bluetooth pairing or key areas; the flash map refuses them at
   compile time and again in the flash driver.
 - This is a test build that the maintainer has not run on an SMK-37. Installing other firmware is at your own risk.
@@ -221,7 +231,8 @@ What no test here can answer, in the order to try it. Note the model, the packag
    hand), switch the keyboard on again (OCTAVE- held if it does not come up in update mode) and run the install again:
    it finishes. The installer refuses an FM-1 package at the keyboard in update mode.
 10. **Going back with M-UPGRADE.** Install your model's stock package with M-UPGRADE: the stock firmware starts, and the
-    keys', pads' and wheels' feel (the calibration) is as before ChoralRoot.
+    keys', pads' and wheels' feel (the calibration) is as before ChoralRoot. Every key sends its own note, the pads,
+    knobs and faders their factory messages (the mapping kept, or rebuilt after ChoralRoot wrote into USRFLASH).
 
 Also worth a line: whether `fm1_install.py --info` shows a unit ID (`unit ID: XXXXXXXX`) and whether two SMK-37s show
 different ones (it is read from the flash chip, whose maker differs from the FM-1's).

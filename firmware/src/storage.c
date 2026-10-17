@@ -129,9 +129,10 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n
  *   FL_SMP 0xC2000..0xE9FFF (USRFLASH, the stock's user area, 40 sectors: ChoralRoot has no samples)
  *     0xC2000..0xD1FFF  OBJ_CZBANK0..+7      0xD2000..0xE5FFF the loop slots (cr_ui.c CRL_FL_BASE, 2 x CRL_SLOTS)
  *     0xE6000..0xE9FFF  the sound pool's sectors 5..8
- *   FL_TAIL 0xEA000..0xF0FFF (the free tail after it, 7 of its 10 sectors)
- *     0xEA000..0xF0FFF  the sound pool's sectors 9..15 (0xF1000..0xF3FFF stay free)
- * The pool's 16 floating sectors are two runs (sp_addr): 5 in FL_DATA, 11 from 0xE6000 on. */
+ *   0xEA000 (USRFLASH's last sector: the stock firmware's end marker, no data of ChoralRoot's)
+ *   FL_TAIL 0xEB000..0xF1FFF (the free tail after it, 7 of its 9 sectors)
+ *     0xEB000..0xF1FFF  the sound pool's sectors 9..15 (0xF2000..0xF3FFF stay free)
+ * The pool's 16 floating sectors are three runs (sp_addr): 5 in FL_DATA, 4 at FL_SMP's end, 7 in FL_TAIL. */
 #define ST_SMK_BASE 0x9D000u
 #define ST_SMK_PAIRS 9u                        /* the pairs below the owner tag */
 #define ST_SMK_SECTORS (2u * ST_SMK_PAIRS)
@@ -143,13 +144,16 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n
 #define ST_SMK_LOOP_SECTORS 20u
 #define ST_SMK_POOL0 0xB6000u                  /* the sound pool: sectors 0 .. ST_SMK_POOL0_N - 1 in FL_DATA */
 #define ST_SMK_POOL0_N 5u
-#define ST_SMK_POOL1 0xE6000u                  /* .. the rest from the end of FL_SMP into FL_TAIL */
-#define ST_SMK_POOL1_N 11u
+#define ST_SMK_POOL1 0xE6000u                  /* .. sectors 5..8 at the end of FL_SMP */
+#define ST_SMK_POOL1_N 4u
+#define ST_SMK_POOL2 0xEB000u                  /* .. sectors 9..15 in FL_TAIL */
+#define ST_SMK_POOL2_N 7u
 /* every place of ChoralRoot's data on the SMK (base, sectors): the owner check and Options > Flash Data clear these
  * (the owner tag is not one of them) */
 static const uint32_t ST_SMK_REGIONS[][2] = {{ST_SMK_BASE, ST_SMK_SECTORS}, {ST_SMK_HIGH, ST_SMK_HIGH_SECTORS},
                                              {ST_SMK_CZB, ST_SMK_CZB_SECTORS}, {ST_SMK_LOOPS, ST_SMK_LOOP_SECTORS},
-                                             {ST_SMK_POOL0, ST_SMK_POOL0_N}, {ST_SMK_POOL1, ST_SMK_POOL1_N}};
+                                             {ST_SMK_POOL0, ST_SMK_POOL0_N}, {ST_SMK_POOL1, ST_SMK_POOL1_N},
+                                             {ST_SMK_POOL2, ST_SMK_POOL2_N}};
 #if FELUCCA_CZ && FELUCCA_QUAD
 _Static_assert(OBJ_COUNT == 20u && OBJ_FAVS + 1u == OBJ_COUNT, "SMK store: a new object needs a place");
 #endif
@@ -160,8 +164,9 @@ _Static_assert(ST_SMK_HIGH >= 0xAF000u + ST_SECTOR && ST_SMK_HIGH + ST_SMK_HIGH_
 _Static_assert(ST_SMK_POOL0 + ST_SMK_POOL0_N * ST_SECTOR <= FL_DATA_HI, "SMK store: the pool's first run past FL_DATA");
 _Static_assert(ST_SMK_CZB >= FL_SMP_LO && ST_SMK_CZB + ST_SMK_CZB_SECTORS * ST_SECTOR <= ST_SMK_LOOPS &&
                ST_SMK_LOOPS + ST_SMK_LOOP_SECTORS * ST_SECTOR <= ST_SMK_POOL1, "SMK store: past the loops");
-_Static_assert(ST_SMK_POOL1 + ST_SMK_POOL1_N * ST_SECTOR <= FL_TAIL_HI && FL_SMP_HI == FL_TAIL_LO &&
-               ST_SMK_POOL1 >= FL_SMP_LO, "SMK store: the pool's second run past FL_TAIL");
+_Static_assert(ST_SMK_POOL1 + ST_SMK_POOL1_N * ST_SECTOR == FL_SMP_HI, "SMK store: the pool's second run past FL_SMP");
+_Static_assert(ST_SMK_POOL2 == FL_TAIL_LO && ST_SMK_POOL2 + ST_SMK_POOL2_N * ST_SECTOR <= FL_TAIL_HI,
+               "SMK store: the pool's third run outside FL_TAIL");
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     copy &= 1u;
@@ -208,11 +213,55 @@ static uint8_t st_owner_cleared;                /* (the console says so) */
 #ifndef ST_FEED
 #define ST_FEED() ((void)0)                     /* (the device: the watchdog, between erases) */
 #endif
+/* The stock firmware's mapping in USRFLASH (global settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000 every
+ * 0x5000, 0x29E3 bytes each, the rest erased; the end marker "usrdata\0" at 0xEAFF8, FL_STOCKTAG): the stock firmware
+ * trusts the area while the marker is there and never rebuilds it, so after a return to stock ChoralRoot's banks and
+ * loops would be its key, knob and fader mapping (every key one note). So: an intact stock mapping is kept (it reads
+ * as empty banks and loops), and the marker is released (its sector erased: the stock firmware rebuilds its factory
+ * mapping at its next start) before ChoralRoot's first erase or program in USRFLASH (storage_hw.c st_erase, st_prog)
+ * and at boot when it stands over anything else (st_owner_check: ours, an older build's, another firmware's). */
+static int st_stock_tagged(void)
+{
+    static const uint8_t TAG[8] = {'u', 's', 'r', 'd', 'a', 't', 'a', 0};
+    uint8_t t[8];
+    uint32_t i;
+    if (st_read(FL_STOCKTAG_OFF, t, 8))
+        return 0;
+    for (i = 0; i < 8u; i++)
+        if (t[i] != TAG[i])
+            return 0;
+    return 1;
+}
+static int st_stock_intact(void)                /* the marker over the stock layout */
+{
+    uint8_t b[8];
+    uint32_t n, k, i, ff;
+    if (!st_stock_tagged() || st_read(FL_SMP_LO, b, 2) || b[0] != 0xA3u || b[1] != 0x3Au)
+        return 0;
+    for (n = 0; n < 8u; n++)                    /* each preset: its head written, its last two sectors erased */
+        for (k = 0; k < 3u; k++) {
+            if (st_read(FL_SMP_LO + 0x1000u + n * 0x5000u + (k ? 0x2000u + k * 0x1000u : 0u), b, 8))
+                return 0;
+            for (ff = 1, i = 0; i < 8u; i++)
+                ff &= b[i] == 0xFFu;
+            if (ff != (k != 0u))
+                return 0;
+        }
+    return 1;
+}
+static void st_stock_release(void)              /* erase the marker's sector, once: later calls find no marker */
+{
+    if (st_stock_tagged())
+        st_erase(FL_STOCKTAG_LO);
+}
+static inline int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
 static void st_smk_clear(void)
 {
-    uint32_t r, k;
+    uint32_t r, k, keep = st_stock_intact();   /* the stock mapping: kept until ChoralRoot stores something there */
     for (r = 0; r < sizeof ST_SMK_REGIONS / sizeof ST_SMK_REGIONS[0]; r++)
         for (k = 0; k < ST_SMK_REGIONS[r][1]; k++) {
+            if (keep && st_in_usrflash(ST_SMK_REGIONS[r][0]))
+                break;
             ST_FEED();
             st_erase(ST_SMK_REGIONS[r][0] + k * ST_SECTOR);
         }
@@ -224,6 +273,8 @@ static void st_owner_check(void)
     uint32_t i, erased = 1, ours = 1;
     for (i = 0; i < 16u; i++)
         want[i] = i < 9u ? (uint8_t)"SMK37DATA"[i] : i - 9u < sizeof FAM - 1u ? (uint8_t)FAM[i - 9u] : 0u;
+    if (!st_stock_intact())
+        st_stock_release();                     /* the marker over anything but the stock mapping: let it rebuild */
     if (st_read(ST_OWNER_OFF, tag, 16))
         return;
     for (i = 0; i < 16u; i++) {
@@ -473,7 +524,7 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
 
 #if FELUCCA_CZ && FELUCCA_QUAD && ((defined(UP_POOL) && UP_POOL) || defined(SP_TEST))   /* (core.h UP_POOL; tests/pool_test.c) */
 /* ---- THE SOUND POOL (ChoralRoot 0.22: docs/PRESETS.md "The pool"): FLOATING objects ----
- * 0xB8000..0xC7FFF (SMK-37: two runs, sp_addr), SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
+ * 0xB8000..0xC7FFF (SMK-37: three runs, sp_addr), SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
  * a user record and one engine's patch). A sector is a bank's copy when its st_hdr_t is valid: ST_MAGIC, type SP_TYPE,
  * slot = the logical bank, len ST_PAYLOAD_MAX, rsv[0] SP_VER, the header CRC; and its payload's CRC matches.
  * LOAD (sp_scan): per bank the valid copy with the newest seq wins (serial arithmetic, so seq wraps; equal seq,
@@ -505,10 +556,13 @@ static uint32_t sp_erases, sp_progs;            /* (the host test's counters: er
 
 static inline int sp_newer(uint32_t a, uint32_t b) { return a != b && a - b < 0x80000000u; }
 #if BOARD_SMK37
-_Static_assert(ST_SMK_POOL0_N + ST_SMK_POOL1_N == SP_NSEC, "SMK store: the pool's two runs hold its sectors");
-static uint32_t sp_addr(uint32_t s)             /* (SMK-37: two runs, ST_SMK_POOL0 / ST_SMK_POOL1 above) */
+_Static_assert(ST_SMK_POOL0_N + ST_SMK_POOL1_N + ST_SMK_POOL2_N == SP_NSEC, "SMK store: the pool's runs hold its sectors");
+static uint32_t sp_addr(uint32_t s)             /* (SMK-37: three runs, ST_SMK_POOL0 / 1 / 2 above) */
 {
-    return s < ST_SMK_POOL0_N ? ST_SMK_POOL0 + s * ST_SECTOR : ST_SMK_POOL1 + (s - ST_SMK_POOL0_N) * ST_SECTOR;
+    if (s < ST_SMK_POOL0_N)
+        return ST_SMK_POOL0 + s * ST_SECTOR;
+    s -= ST_SMK_POOL0_N;
+    return s < ST_SMK_POOL1_N ? ST_SMK_POOL1 + s * ST_SECTOR : ST_SMK_POOL2 + (s - ST_SMK_POOL1_N) * ST_SECTOR;
 }
 #else
 static uint32_t sp_addr(uint32_t s) { return SP_BASE + s * ST_SECTOR; }
@@ -534,6 +588,38 @@ static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (s
     return c == crc ? 0 : -1;
 }
 
+#if BOARD_SMK37
+/* 0.24-beta2-smk37's and 0.24-beta3-smk37's FL_TAIL began at 0xEA000, the stock marker's sector: their pool sector 9
+ * was there, their 10..15 are this build's 9..14 as they are (a pool sector carries no number). A valid pool commit
+ * record at 0xEA000 is moved to sector 15 (0xF1000, never written by those builds) when that is blank: the pages copied, the record's page last, read
+ * back; then 0xEA000 is erased (FL_STOCKTAG, its one erase). A cut before the erase: the next scan finds the same
+ * copy at 0xF1000 and erases 0xEA000. Once a power-on (sp_scan). */
+static uint8_t sp_old_done;
+static void sp_old_move(void)
+{
+    st_hdr_t h;
+    uint32_t to = sp_addr(SP_NSEC - 1u), off, same = 1;
+    if (sp_old_done || ST_BLOCKED())
+        return;
+    sp_old_done = 1;
+    if (st_read(FL_STOCKTAG_LO, &h, sizeof h) || h.magic != ST_MAGIC || h.type != SP_TYPE || h.slot >= SP_NBANK ||
+        h.len != ST_PAYLOAD_MAX || h.rsv[0] != SP_VER || h.hcrc != st_crc32(&h, sizeof h - 4u))
+        return;
+    if (st_blank(to))
+        for (off = ST_SECTOR; off; ) {          /* the record's page (0) last */
+            off -= 256u;
+            if (st_read(FL_STOCKTAG_LO + off, st_buf, 256u) || st_prog(to + off, st_buf, 256u))
+                return;
+        }
+    for (off = 0; off < ST_SECTOR && same; off += 256u) {
+        if (st_read(FL_STOCKTAG_LO + off, st_buf, 256u) || st_read(to + off, st_buf + 256u, 256u))
+            return;
+        same = !memcmp(st_buf, st_buf + 256u, 256u);
+    }
+    if (same)
+        st_erase(FL_STOCKTAG_LO);
+}
+#endif
 /* the 16 commit records -> sp_cur, sp_top, sp_last (power-on; at most 16 header reads and one payload read per bank,
  * more only when a payload fails its CRC) */
 static __attribute__((unused)) void sp_scan(void)
@@ -541,6 +627,9 @@ static __attribute__((unused)) void sp_scan(void)
     st_hdr_t h;
     uint32_t seq[SP_NSEC], crc[SP_NSEC], s, b;
     uint8_t bank[SP_NSEC];
+#if BOARD_SMK37
+    sp_old_move();
+#endif
     sp_last = SP_NONE;
     sp_top = 0;
     sp_spare_ok = 0;

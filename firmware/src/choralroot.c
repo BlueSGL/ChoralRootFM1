@@ -60,6 +60,9 @@
 #ifndef FELUCCA_SAMPLE
 #define FELUCCA_SAMPLE 0         /* no SAMPLE engine, no sample sets in the image (engine 4: a retired slot) */
 #endif
+#if BOARD_SMK37 && (FELUCCA_SAMPLE || FELUCCA_SLICE)
+#error "BOARD_SMK37: no user sample flash (eng_sample.c's slots at 0xA0000.. are the SMK's store, storage.c)"
+#endif
 #ifndef FELUCCA_GRAIN
 #define FELUCCA_GRAIN 1          /* the GRAIN engine (engine 8), 0.22: grains over material it renders itself from four
                                   * knobs (eng_grain.c, grain_src.c, docs/GRAIN.md); two 32 KB buffers of POOL. Retired

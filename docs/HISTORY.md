@@ -5400,3 +5400,36 @@ localStorage (try / catch); `?big` ticks it for screenshots; the six buttons' pr
 block. PNGs at 1920 and 1280 px (device scale 2), 1920 with Big screen and 1920 at scale 1:
 build/emu-web-smk37-test/page-1920.png, page-1280.png, page-1920-big.png, page-1920-dpr1.png. test_web_emu_smk PASS;
 run_all ALL SUITES PASSED (23 suites); `./build.sh` last.
+## 2026-10-16 (the SMK-37's stock mapping)
+
+3y160. **The SMK-37: the stock mapping kept, its marker released before the first write; FL_TAIL one sector up
+(genkigenki's follow-up PR; branch smk37-stock-mapping on origin/main 268d3d6, 0.24-beta3).** The stock firmware keeps its key,
+knob and fader mapping in USRFLASH (settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000, every 0x5000) and trusts
+it while its end marker `usrdata` at 0xEAFF8 is there. 0.24-beta2-smk37 and beta3-smk37 clear the CZ-1 bank and loop sectors there
+at the owner change and leave the marker, so after a return to stock every key sends one note; and their FL_TAIL
+begins at 0xEA000, the marker's sector (v0.24-beta3-smk37 is 268d3d6: FL_TAIL unchanged). Seven commits: `FL_TAIL` 0xEB000..0xF1FFF (an assert keeps it after the marker's sector),
+the pool as three runs in `sp_addr` (0xB6000 x5, 0xE6000 x4, 0xEB000 x7), `ST_SMK_REGIONS` with the third; genkigenki's
+78ed3ab and b533d87 from the SMK branch (`cherry-pick -x`, adapted): an owner change keeps an intact stock mapping
+(the pool's FL_DATA and FL_TAIL runs cleared as before), the marker's sector erased once before the first erase in
+USRFLASH (`storage_hw.c st_erase`) and at boot when it stands over anything but the intact layout (the magic, each
+preset's head written and its last two sectors erased); `FL_STOCKTAG` allows exactly 0xEA000, as a whole-sector erase,
+outside `FL_STORE_OK`; `st_prog` in USRFLASH releases it too (the stock layout's erased preset tails are written
+without an erase). b533d87's user-sample refusals (`eng_sample.c`, `editor.c`) are left out: ChoralRoot builds neither
+SAMPLE nor SLICE; `choralroot.c` makes an SMK build with either an `#error` (their place 0xA0000.. is the SMK's
+store). A unit that ran 0.24-beta2-smk37 or beta3-smk37: its pool sectors 10..15 are this build's 9..14 (a pool sector carries no
+number); `sp_old_move` (once a power-on, before `sp_scan`) copies a valid pool record at 0xEA000 to 0xF1000 when that
+is blank (the record's page last), reads it back and then erases 0xEA000; a cut before the erase finishes at the next
+power-on. SMK37.md: the first start, going back, Storage, Safety, What to test. **Checked** (WSL, Ubuntu x86-64; the
+host compiler emsdk's clang): `smk_flash_test` (the marker sector, the tail, the three runs, 0xEA000 and 0xF2000.. in
+no window or region) and `smk_owner_test` (the intact mapping kept at the owner change and the next boot, the release
+once, the layout check, the release at boot over other data, the old pool sector's move, once, cut, onto a written
+sector 15, the stock marker's sector left alone; nothing else written) pass. `CR_VERSION=0.24 sh tests/run_all.sh`
+gives the same verdicts on this branch and on 268d3d6 in the same environment: 14 suites pass (build, install,
+layout_gen, the web suites, web_emu_build, layout_build/test, web_emu_smk, web_emu_test); run_tests passes all but
+FX layer effects, releases (`releases_test.py` cannot read the local SMK tags, as 3y150) and site, the same on both, with the SMK hooks
+green (the three models' packages too) and 317 golden renders unchanged; cr_tests, cr_draw and the native emulator's
+suites do not build or match there (no ASan runtime, no SDL / CoreMIDI, the draw goldens). The FM-1 build is
+byte-identical to 268d3d6's (choralroot.fwsc 0654f106.., choralroot.bin 3d5d0805.., ota.bin ab3242c8.., stub.bin
+4e33bfbb.., the ELFs too). `BOARD=smk37 [MODEL=elite|mke] ./build.sh`: Pro 34821d76..ca05, Elite 467ae6da..6a44,
+MKE-P37 70c5e472..b2b0; XIP 538 564 B (Elite 538 580), RAM 80 940, POOL 306 196. Installed on an SMK-37 Pro over
+another firmware: it starts.
