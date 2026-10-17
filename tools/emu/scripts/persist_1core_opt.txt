@@ -13,7 +13,7 @@ knob KNOB1 -1
 wait 400
 shot build/emu/test/persist_1core_opt.ppm
 dump
-knob SELECT +2
+knob SELECT +5                # Version (past Output and, since 0.25, Chord Keys, Full K Shorts, MIDI Keys)
 wait 300
 shot build/emu/test/persist_1core_version.ppm
 dump

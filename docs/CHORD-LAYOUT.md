@@ -1,6 +1,7 @@
 # Chord Layout: Classic and FM-1 (the design)
 
-Status: **design, every question answered by the owner on 2026-10-16: ready to build** (HISTORY 3y155, with the owner's answers to its open questions
+Status: **built** (HISTORY 3y162: the firmware, the emulators, the manual; [The build](#the-build-history-3y162) says where
+it differs from the design below). The design: every question answered by the owner on 2026-10-16 (HISTORY 3y155, with the owner's answers to its open questions
 the same day: [the second round](#the-second-round-the-owners-answers-to-the-open-questions-2026-10-16)).
 No firmware implements it yet. The pictures
 are in [design/chord-layout-mockups.html](../design/chord-layout-mockups.html) (rendered:
@@ -104,6 +105,34 @@ The five questions the second round left open, answered:
 One new question from answer 6, [Open questions](#open-questions) 16, answered the same evening: **play at the
 pair** (when nothing more can change the chord). With that the design was settled for the build ("Then we're good
 to build it").
+
+## The build (HISTORY 3y162)
+
+Built on 355fd58 the same day (rebased on cd8358b), in this order of the design. Where the code differs from the sections below:
+
+- **The Options' place.** The four entries sit together **after Output** (Chord Keys, SUS Window, Full K Shorts, MIDI
+  Keys), not beside Secret Chords, Split Point and MIDI Raw Chord as proposed: every entry before them keeps its place
+  (the emulator's scripts and the players' habits count SELECT steps), only Version, Calibrate and Reset Settings move
+  down by three in Classic (four in FM-1, where the SUS Window is listed). `cu_opt_vis` / `cu_opt_next` skip what is not
+  listed; the picker's dots count what is.
+- **The window's clock** is `cu_now()` when the scan takes the key, for both the type keys and the roots (a root with
+  Key Touch Dynamic is taken when its velocity is known, 7 .. 15 ms after the touch: the same for every root), not the
+  scan stamps `note_t0` (TIMER4 ticks).
+- **A type key pressed during an open gesture** joins it whatever it is (F# with Secret Chords not applying too), and
+  every key of the gesture is posted at the decision in the order pressed, so "last pressed wins" stays true. A type
+  key tapped and let go inside the window still counts at the decision (Advanced re-types the held root once; Free
+  sounds the last root and stops).
+- **No engine amend, no looper amendment** (the third round removed them from the design): the engine gained two forms
+  of `cr_mod_ex` (`CR_MOD_HELD`: down without a press; `CR_MOD_PRESS`: a press of a mod held) and `cr_set_full_chords`
+  (0 as before, 1 chords on every key, 2 single notes: G5 off must also stop Key plays Chords' chords).
+- **The SMK-37** reads the bits as Classic / Off / MIDI Keys Off and writes them as 0 (its own record); the four
+  entries are not listed there.
+- **The emulator** shows the layout: the web page's key stickers and the LFO button's role follow it (`web_layout`),
+  the native one's help names both; its dumps have a `chord keys:` line (the type keys, the gesture, the waiting roots,
+  MIDI Keys, the Full keyboard's switches, LATCH and the LFO light's level) and a `screen foot:` line; the Options line
+  counts the entries listed.
+- **Measured**: XIP 537 804 -> 541 948 B (+4 144, 94.5 %), RAM 80 176 -> 80 368 B (+192), POOL unchanged; the SMK-37
+  builds (XIP 541 060 B on main cd8358b).
 
 ## The two layouts
 

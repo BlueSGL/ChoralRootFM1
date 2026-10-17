@@ -107,7 +107,29 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
 #define CRS_LOOP_MODE(s) ((unsigned)(s)->loop_rec & 15u)
 #define CRS_LOOP_KEYS(s) (((unsigned)(s)->loop_rec >> 4) & 1u)
 #define CRS_KEY_KEYS(s) (((unsigned)(s)->loop_rec & CRS_KEY_PLAY) ? 1u : 0u)
-#define CRS_LOOP_REC(mode, keys) ((uint8_t)(((mode) & 15u) | ((keys) & 1u) << 4))  /* usb_level: USB audio follows MASTER / takes the full level (docs/USB-AUDIO.md) */
+#define CRS_LOOP_REC(mode, keys) ((uint8_t)(((mode) & 15u) | ((keys) & 1u) << 4))
+
+/* The chord layouts (docs/CHORD-LAYOUT.md, 0.25): three Options in the spare bits of `sticky` (bit 0 stays LATCH, the
+ * manual one): bit 1 Options > Chord Keys FM-1 (0 Classic), bit 2 Full K Shorts On, bits 3 .. 6 the SUS Window as
+ * (ms - 50) / 5 in four bits' two's complement (-4 .. +6: 30 .. 80 ms; 0 = 50 ms). Zero is every default: no
+ * version, no migration. Every older firmware checks the byte with CRS_FIX(sticky, 0, 1): a byte with a new bit set
+ * reads as its default (LATCH off), nothing else touched, so it ignores the layout and starts in Classic.
+ * MIDI Keys rides in `raw_sound` the same way: bit 0 stays Raw Chord Sound, bits 1 .. 5 the channel (0 Off, 1 .. 16);
+ * an older firmware reads a byte with a channel as Raw Chord Sound Off. Both bytes are the engine's too
+ * (cr_settings_apply / capture): it takes bit 0 alone */
+#define CRS_LAYOUT_FM1 0x02u
+#define CRS_FULL_SHORT 0x04u
+#define CRS_STICKY_AUTO 0x7Eu                /* bits 1 .. 6: Options (automatic); bit 0, LATCH, manual */
+#define CRS_LATCH(s) ((unsigned)(s)->sticky & 1u)
+#define CRS_LAYOUT(s) (((unsigned)(s)->sticky & CRS_LAYOUT_FM1) ? 1u : 0u)
+#define CRS_FULLSHORT(s) (((unsigned)(s)->sticky & CRS_FULL_SHORT) ? 1u : 0u)
+#define CRS_SUSWIN_CODE(s) ((int)(((unsigned)(s)->sticky >> 3) & 15u) - (((unsigned)(s)->sticky & 0x40u) ? 16 : 0))
+#define CRS_SUSWIN_MS(s) ((unsigned)(50 + 5 * CRS_SUSWIN_CODE(s)))
+#define CRS_STICKY_BYTE(latch, layout, fshort, ms) ((uint8_t)(((latch) ? 1u : 0u) | ((layout) ? CRS_LAYOUT_FM1 : 0u) | \
+    ((fshort) ? CRS_FULL_SHORT : 0u) | (((unsigned)(((int)(ms) - 50) / 5) & 15u) << 3)))
+#define CRS_RAW(s) ((unsigned)(s)->raw_sound & 1u)
+#define CRS_MIDI_KEYS(s) (((unsigned)(s)->raw_sound >> 1) & 31u)
+#define CRS_RAW_BYTE(raw, keys) ((uint8_t)(((raw) ? 1u : 0u) | (((keys) & 31u) << 1)))  /* usb_level: USB audio follows MASTER / takes the full level (docs/USB-AUDIO.md) */
 
 /* Options > Output (0.19, docs/AUDIO-QUALITY.md) rides in bit 1 of pick_roots (bit 0: the retired picker option): set =
  * Classic (0.18's master), clear = Clean, so every older record reads as the default and no version is needed. A

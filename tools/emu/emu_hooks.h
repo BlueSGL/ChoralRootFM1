@@ -97,4 +97,5 @@ void emu_fw_stages(char *buf, uint32_t n);  /* the audio ISR's stage profile (EM
  * v[3] the longest to the audio block that applied it; v[4] the key scans done inside redraws. Returns the strips
  * the redraw in progress (or the last one) has composed */
 uint32_t emu_fw_keys(uint32_t v[5]);
+uint32_t emu_fw_layout(void);              /* Options > Chord Keys: 1 FM-1, 0 Classic (the panel's labels) */
 void emu_fw_ui_info(char *buf, uint32_t n);  /* the last UI frame's screen: kind, text, strips (EMU_UI_LOG) */

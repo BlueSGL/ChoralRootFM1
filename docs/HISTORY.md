@@ -5552,3 +5552,44 @@ plays as soon as nothing more can change the chord: at the pair (G# and A# both 
 when all three type keys are held with them applying, otherwise at the window's close; rule B's sounding chord and
 LOCK's latch change at the same moment. Every question of docs/CHORD-LAYOUT.md is answered: the design is ready to
 build. The mock-ups' two timelines redrawn (Dsus at the pair, 30 ms).
+
+## 2026-10-16 (the chord layouts built: Classic and FM-1)
+
+3y162. **Options > Chord Keys: Classic / FM-1, SUS Window, Full K Shorts, MIDI Keys (docs/CHORD-LAYOUT.md, the design of
+3y155 with every question answered; the owner: "Do this task here").** Classic is untouched in every gesture. FM-1
+(`cr_ui.c`): F#3 G#3 A#3 DIM MIN MAJ, G#3 + A#3 SUS always, F3 G3 A3 B3 the extensions, roots C4 .. G5 (`cu_root0`),
+the pick maps on D4 as before (`CU_PICK0`). The type keys are resolved into the `cr_mod_t` set Classic's keys would
+give (`cu_tk_resolve`; the secret chords when Secret Chords applies, else last pressed wins) and posted as a
+difference: the new types `CR_MOD_HELD`, the old ones up, one `CR_MOD_PRESS` (`cr_engine.c cr_mod_ex`: two new forms;
+a key of the pair let go leaves the other HELD, nothing re-strikes). **The SUS Window** (`cu_tk_press` / `cu_tk_poll` /
+`cu_tk_decide`): a combinable type key with none held opens a gesture; nothing is posted until it is decided, at the
+pair (all three keys with Secret Chords applying) or at the window's close; a root pressed meanwhile waits
+(`cu.kwait`) and starts then, with its velocity (a root let go meanwhile: a short chord); what already sounds changes
+once (rule B); a root with no type key, or type keys held from before, at once. LOCK latches the gesture as one type
+key (the same set again alone: off at the release). **LOCK on LFO** (tap; held: the LOCK layer as a layer button,
+`cu_lbtn`; LFO + a key: LOCK's tap at once), **LATCH on GLO held + LFO** (`cu_latch_toggle`; LFO held + GLO: the LOCK
+layer; GLO held alone never opens the Options, as before); the LFO light steady for LOCK, pulsing lit / middle / glow
+/ middle for LATCH (lit / middle with LOCK on). The KEY layer's pick ignores the pair's second key within the window.
+**The Full keyboard**: KNOB 1 the voicing in both layouts; Full K Shorts: F#5 the chord keys (the Chords keyboard, the
+roots to F5), G5 chords on every key (`cr_set_full_chords` 1: the latch, else Key Mode's, else single notes; 2: notes
+only), quick press toggles, long press momentary, G5 starting from Key plays. **MIDI Keys**: `cr_midi.c crm_key`
+(notes 53 .. 79 on its channel, CC 120 / 123 all up), `cr_out.c` a 64-entry queue that never loses a note-off
+(`cr_mkq`), `cu_mkeys_poll` presses the keys (`cu.kmidi` beside the keybed's `cu.kpanel`). **Settings**: `sticky` bits
+1 .. 6, `raw_sound` bits 1 .. 5, no version; the engine reads bit 0 alone; automatic. The Options: the four after
+Output (not mid-list as the design proposed: every entry before keeps its place). Emulators: the web page's stickers
+and LFO's role follow the layout (`web_layout`); the dumps' `chord keys:` and `screen foot:` lines. Docs: MANUAL ("The
+FM-1 chord keys", the keybed, buttons, knobs, Full keyboard, Options, MIDI in, quick reference), SETTINGS, FLASH (the
+account), CHORD-LAYOUT ("The build"). Tests: `cr_engine_test` s_fm1 (HELD, PRESS, the pair, the secret pair, the Full
+keyboard's 0 / 1 / 2), `cr_settings_test` t_layout (+ t_auto's shared bytes 3 -> 4), `cr_midi_test` t_keys; emulator
+`cr_fm1_keys` (28 dumps: the pair, the waiting root, no partner, a held G#, C4 C#4, B3 = 9, Simple's root first, LOCK on
+LFO, the LOCK layer's footer, LATCH and the pulse, GLO held alone, the KEY layer's pick, back to Classic) and
+`cr_fm1_midi_full` (MIDI Keys and the Full keyboard's switches); the Options' positions moved in `cr_opt_keys`,
+`cr_calib`, `cr_version`, `reset_do`, `quad_drive_check`, `persist_1core_opt` and their checks (33 entries in
+Classic), `cr_fullkbd`'s KNOB 1 (the voicing). Size: XIP 537 804 -> 541 948 B (+4 144, 94.5 %), RAM 80 176 -> 80 368
+(+192), POOL unchanged; `BOARD=smk37 ./build.sh` builds (XIP 541 060 on main cd8358b). **Checked**: `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED on main cd8358b (23 suites, 109 s; test_cr 1085 ok, test_persist 113, test_retired 18, test_pool 7; `cr_engine_test` 2800, `cr_settings_test` 282, `cr_midi_test` 34; 317 golden renders, 0 changed; 0 lint; the web emulators built, `test_web_emu` and `test_web_emu_smk` PASS). **On the unit** (the owner: "Flash it"): no other session on it, the Mac kept awake; `--info`: one FM-1, FM-1_920
+running ChoralRoot 0.24-beta3, unit ID 5BD75BE3. A full backup first:
+`fm1-backups/fm1-backup-2026-10-16-before-chord-layout.json` (69 566 B: settings, user sounds 001..128, the
+favourites, loop slot 1). Flashed this build's package, `caffeinate -dimsu python3 tools/fm1_install.py
+build/choralroot.fwsc --unit 5BD75BE3 --yes` (sha256 20d0bb6a...): "done: the FM-1 runs FM-1_920", the same unit after
+the restart. After: `--info` ChoralRoot 0.24 (this tree's version string), `--sounds` all 128 slots read (83 hold a
+sound, as before), `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0. Not played yet; not pushed.

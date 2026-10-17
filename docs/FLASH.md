@@ -90,3 +90,9 @@ delay line) now competes with GRAIN's two 32 KB buffers.
 frame's cost on the unit after 3y131 is not read (the emulator cannot see the device compiler's -Oz; the owner's
 `pk_*` readout would); `tests/target_budget.txt` rewritten from the final listing (3y132: the tool's nesting heuristic
 reads `fm6_render` and `quad_render` differently now, their per-sample loops the same length).
+
+**Since: the chord layouts (0.25, HISTORY 3y162, docs/CHORD-LAYOUT.md).** Options > Chord Keys (the FM-1 layout, the
+SUS Window, LOCK on LFO), Full K Shorts and MIDI Keys, against main 355fd58: XIP 537 804 -> 541 948 B (+4 144, 94.5 %:
+31 492 B of margin left), RAM 80 176 -> 80 368 B (+192: MIDI Keys' queue, the waiting roots, the type keys' state),
+POOL 306 196 B unchanged. The design estimated +2.5 .. 4.5 KB of XIP and about 160 B of RAM. Nothing in the audio ISR
+but MIDI in's channel check (`crm_key`) and the queue's post.

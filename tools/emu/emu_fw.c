@@ -512,6 +512,21 @@ void emu_fw_dump(void)
     }
     printf("  lock: on %u latched %02X type-key %s ext-keys %s\n", (unsigned)cu.clock, (unsigned)cu.mlatch,
            cs.lock_keep ? "keeps" : "clears", cs.lock_push ? "pushed" : "toggle");   /* (latched: bit cr_mod_t) */
+    {
+#if EMU_SMK37
+        unsigned lfo = 0;                            /* (the SMK-37: no FM-1 layout, no levels of this kind) */
+#else
+        uint8_t q = cu_led_pos[panel.btn[BT_LATCH] % CU_LED_IDS];   /* the LFO button's light: 4 lit 3 mid 2 dim 1 faint */
+        unsigned lfo = q == 0xFFu ? 0u : ((fm1_led[q >> 3] >> (q & 7u)) & 1u) ? 4u : ((fm1_led_dim2[q >> 3] >> (q & 7u)) & 1u) ? 3u
+                       : ((fm1_led_dim[q >> 3] >> (q & 7u)) & 1u) ? 2u : ((fm1_led_faint[q >> 3] >> (q & 7u)) & 1u) ? 1u : 0u;
+#endif
+        printf("  chord keys: layout %s types-held %02X posted %02X gesture %u kwait %07X kmidi %07X full-chk %u full-all %u"
+               " suswin %u midi-keys %u full-short %u latch %u lfo-led %u\n", cu_fm1() ? "fm1" : "classic", (unsigned)cu.tk_held,
+               (unsigned)cu.tposted, (unsigned)cu.g_open, (unsigned)cu.kwait, (unsigned)cu.kmidi, (unsigned)cu.full_chk,
+               (unsigned)cu.full_all, (unsigned)cs.suswin, (unsigned)cs.midi_keys, (unsigned)cs.full_short,
+               (unsigned)cs.sticky, lfo);
+    }   /* (FM-1's
+                                                      * type keys: key bits; posted: bit cr_mod_t; docs/CHORD-LAYOUT.md) */
     {                                               /* the engine's side of the chord keys: down (held or latched),
                                                      * what the chord keys' LEDs show, the voices' own specs */
         unsigned v, fr = 0;
@@ -609,9 +624,19 @@ void emu_fw_dump(void)
                 id[k] = (char)CRB_OUT[5u + k];
         id[k] = 0;
         printf("  version: options '%s' identity '%s' build '%s'\n", ov, id, FELUCCA_VERSION);
-        opt_text(cu.opt_sel, ov, sizeof ov);         /* the Options: the entry selected and its value's text */
-        printf("  options: open %u entry %u of %u '%s' value '%s'\n", (unsigned)cu.opt_open, (unsigned)cu.opt_sel,
-               (unsigned)cu_opt_n(), O_NAME[cu.opt_sel % O_N], ov);
+        {                                            /* the Options: the entry selected (its place among those
+                                                      * listed, cu_opt_vis: what SELECT counts) and its value's text */
+            uint32_t o, at = 0, n = 0;
+            for (o = 0; o < cu_opt_n(); o++)
+                if (cu_opt_vis(o)) {
+                    if (o == cu.opt_sel)
+                        at = n;
+                    n++;
+                }
+            opt_text(cu.opt_sel, ov, sizeof ov);
+            printf("  options: open %u entry %u of %u '%s' value '%s'\n", (unsigned)cu.opt_open, (unsigned)at,
+                   (unsigned)n, O_NAME[cu.opt_sel % O_N], ov);
+        }
     }
     printf("  boot: %s reset %s failed %u pending %u prev_stage %u\n", bootguard_mode_name(bootguard.mode),
            bootguard_class_name(bootguard.cls), (unsigned)bootguard.failed, (unsigned)bootguard.pending,
@@ -702,7 +727,7 @@ void emu_fw_dump(void)
                 for (c = 0; c < 4u; c++)
                     if (sc->cell[r][c].flags & CR_CF_ON)
                         printf(" %u.%u:%s=%s", r, c, sc->cell[r][c].label, sc->cell[r][c].value);
-            printf("\n");
+            printf("\n  screen foot: '%s'\n", sc->footer);   /* (the bottom line: a layer's keys, the Options') */
         }
         for (k = 0; k < 2u; k++)
             printf("  session %s: %s / %s edited %u kind %u crc %04X level %d pan %d\n", k ? "bass" : "chord",
@@ -757,6 +782,7 @@ void emu_fw_dump(void)
 
 /* the screen the last UI frame drew (emu.c EMU_UI_LOG): its kind, view, the texts that pick its glyphs, the animation
  * clock, the strips drawn and blitted */
+uint32_t emu_fw_layout(void) { return (uint32_t)cu_fm1(); }
 void emu_fw_ui_info(char *buf, uint32_t n)
 {
     static const char *const K[] = {"none", "stripes", "chord", "picker", "meter", "keyboard", "arp", "params", "geek",

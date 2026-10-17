@@ -213,6 +213,7 @@ WEB_EXPORT const uint8_t *web_btn_id(void) { return emu_hal.btn_id; }
 WEB_EXPORT const uint8_t *web_enc_id(void) { return emu_hal.enc_id; }
 WEB_EXPORT const int8_t *web_enc_dir(void) { return emu_hal.enc_dir; }
 WEB_EXPORT uint32_t web_play_green(void) { return emu_hal.led_play_green; }   /* (col << 3) | row */
+WEB_EXPORT uint32_t web_layout(void) { return emu_fw_layout(); }   /* the chord keys' labels: 1 FM-1, 0 Classic */
 
 /* every LED at once: [0..26] note keys, [27..40] buttons in label order, [41] PLAY's green; 0 off 1 dim 2 lit
  * 3 mid (fm1_led_dim2: the middle level, Key Mode's tonic) 4 faint (fm1_led_faint: the idle chord keys) */

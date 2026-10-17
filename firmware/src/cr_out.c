@@ -458,6 +458,8 @@ enum {
     CRE_KEYPLAYS,     /* v: Key plays 0 Chords, 1 Notes */
     CRE_KEYBOARD,     /* a: 1 the Full keyboard, v: the split key's MIDI note */
     CRE_KEYSNAP,      /* v: Snap 0 Off, 1 Scale, 2 Chord (cr_set_key_snap) */
+    CRE_FULLCHORD,    /* v: the Full keyboard's G5 (Full K Shorts): 0 none, 1 chords on every key, 2 single notes
+                       * (cr_set_full_chords) */
     CRE_LOOP,         /* a: LP_*, b / v: its argument */
     CRE_AT            /* v: the keys' aftertouch 0..127 (cr_ui.c cu_touch_poll): both parts, channel pressure out */
 };
@@ -601,6 +603,7 @@ static void cr_apply(const cr_ev_in_t *e)
     case CRE_KEYPLAYS: cr_set_key_plays(&cr, e->v); break;
     case CRE_KEYBOARD: cr_set_keyboard(&cr, e->a, e->v); break;
     case CRE_KEYSNAP: cr_set_key_snap(&cr, (cr_keysnap_t)e->v); break;
+    case CRE_FULLCHORD: cr_set_full_chords(&cr, e->v); break;
     case CRE_LOOP: cr_loop_op(e); break;
     case CRE_AT: cr_touch_at((uint32_t)e->v); break;
     default: break;
@@ -643,6 +646,44 @@ static int cr_min_take(crm_act_t *a)             /* the UI */
     *a = cr_minq[cr_minq_r % CR_MINQ];
     RING_PUBLISH();
     cr_minq_r++;
+    return 1;
+}
+
+/* MIDI Keys (crm_key): the keys' events, ISR -> UI, a queue of their own (cr_minq drops a burst: a lost note-off
+ * would hold a key). A note-on is taken while fewer than CR_MKQ_ON wait, a note-off while there is room; one that
+ * finds the queue full asks for every key up instead (cr_mkq_allup), so nothing stays held */
+#define CR_MKQ 64u                               /* (a power of two) */
+#define CR_MKQ_ON 48u
+#define CR_MKQ_ALLUP CRM_KEY_ALLUP
+static volatile uint8_t cr_mkeys_ch;             /* the keys' channel 1 .. 16, 0 Off (the UI's cu_route) */
+static uint16_t cr_mkq[CR_MKQ];
+static volatile uint32_t cr_mkq_w, cr_mkq_r;
+static volatile uint8_t cr_mkq_allup;
+static void cr_mkq_post(uint32_t ev)
+{
+    uint32_t used = cr_mkq_w - cr_mkq_r;
+    if (((ev >> 12) & 1u) ? used >= CR_MKQ_ON : used >= CR_MKQ) {
+        if (!((ev >> 12) & 1u))
+            cr_mkq_allup = 1;
+        return;
+    }
+    cr_mkq[cr_mkq_w % CR_MKQ] = (uint16_t)ev;
+    RING_PUBLISH();
+    cr_mkq_w++;
+}
+static int cr_mkq_take(uint32_t *ev)             /* the UI */
+{
+    if (cr_mkq_r == cr_mkq_w) {
+        if (cr_mkq_allup) {                      /* (an off was lost: every key up, once the queue is empty) */
+            cr_mkq_allup = 0;
+            *ev = CR_MKQ_ALLUP;
+            return 1;
+        }
+        return 0;
+    }
+    *ev = cr_mkq[cr_mkq_r % CR_MKQ];
+    RING_PUBLISH();
+    cr_mkq_r++;
     return 1;
 }
 
@@ -696,8 +737,15 @@ static void cr_midi_in(void)
             }
         } else if (status >= 0x80u && status < 0xF0u) {
             crm_act_t a[2];
-            int i, n = crm_map(status, d1, d2, en, ch, a);
+            uint32_t kev;
+            int i, n, kr = crm_key(status, d1, d2, cr_mkeys_ch, &kev);
             cr_in_msg_n++;
+            if (kr >= 0) {                       /* MIDI Keys' channel: the FM-1's keys, nothing else */
+                if (kr)
+                    cr_mkq_post(kev);
+                continue;
+            }
+            n = crm_map(status, d1, d2, en, ch, a);
             for (i = 0; i < n; i++) {
                 if (a[i].kind == CRM_FORWARD)
                     midi_event(status & 0xF0u, a[i].part, d1, d2);

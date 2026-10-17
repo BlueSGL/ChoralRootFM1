@@ -136,6 +136,11 @@ white    6     m7    M7    LOCK  9       D4    E4    F4   ...   G5
 In a layer, a menu or a dialog the root keys may take another job (they pick a slot, type a letter, choose an
 engine). The chord block keeps its job everywhere but in the KEY layer, where MAJ and MIN pick the scale.
 
+This is the **Classic** layout, the Orchid's and the default. **Options > Chord Keys** switches to a second one,
+**FM-1**, made for this keybed: the three small black keys are DIM MIN MAJ, SUS is G#3 + A#3 pressed together (one
+finger on both), B3 is the 9, C4 and C#4 become roots and LOCK moves to the LFO button. See
+[The FM-1 chord keys](#the-fm-1-chord-keys).
+
 ### The buttons
 
 Two rows of six, and the two octave buttons.
@@ -145,7 +150,7 @@ Two rows of six, and the two octave buttons.
 | FX | **FX** | the effects on / off | the FX layer |
 | SEL | **KEY** | Key Mode on / off | the KEY layer |
 | ENV | **BASS** | the bass on / off | the BASS layer |
-| LFO | **LATCH** | latch on / off | nothing |
+| LFO | **LATCH** (FM-1 chord keys: **LOCK**) | latch on / off (FM-1: LOCK on / off; LATCH is GLO held + LFO) | nothing (FM-1: the LOCK layer) |
 | EDIT | **EDIT** | the sound editor | the engine picker |
 | GLO | **OPT** | the Options | with a knob: the knob's second job |
 | HOME | **HOME** | back to the view; on the view: the next view | 0.6 s: the view menu |
@@ -169,7 +174,7 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | SELECT | the tempo, 20 to 300 BPM; in a layer or a menu: moves the picker (the KEY layer: turns its page) | the metronome's level |
 | PRESETS | the chord sound: the next or previous one of its engine | the chord sound's engine |
 | ALGORITHM | the bass sound: off, then the bass engine's sounds | the bass sound's engine (with BASS held instead: the bass level) |
-| KNOB 1 | the chord's voicing (on the Full keyboard: the octave) | the Single Notes split point |
+| KNOB 1 | the chord's voicing (on the Full keyboard too, since 0.25) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
 | KNOB 4 | the chord part's send into the selected effect, in per cent | |
@@ -360,7 +365,8 @@ same type pressed again (off, above) and a type pressed when none is latched lea
 
 - **KNOB 1** revoices the chord: one click up moves the lowest note up an octave, one click down moves the highest
   note down, from -12 to +12. The screen adds `voicing +2` under the notes. The voicing applies to every chord that
-  follows, and to a playing loop. (On the Full keyboard there is no chord to voice: KNOB 1 is the octave there.)
+  follows, and to a playing loop. On the Full keyboard too (since 0.25: chords play there, Key plays Chords and
+  G5's chords); its octave is OCT- / OCT+'s.
 - **OCT-** and **OCT+** shift the root keys by octaves, from -2 to +2 (`Oct +1` at the top right). A low voicing can
   put chord notes below D4, where no key can light for them; the notes line on the screen always has them.
 
@@ -397,6 +403,44 @@ held together make a third chord:
 | MIN + SUS | minor with a fourth instead of a fifth | `Dm` with a small `add4` |
 
 The small `5` and `add4` are red. Extensions stack on top as usual.
+
+### The FM-1 chord keys
+
+**Options > Chord Keys: FM-1** (new in 0.25; Classic, the Orchid's layout above, is the default and is unchanged):
+
+```
+black      DIM   MIN   MAJ         C#4   D#4         F#4   G#4   A#4         C#5   D#5         F#5
+           F#3   G#3   A#3
+                 \__ SUS __/   (G#3 + A#3 together)
+white    6     m7    M7    9     C4    D4    E4    F4    G4    A4    B4    C5    D5    E5    F5    G5
+         F3    G3    A3    B3    |------------------------ roots: C4 .. G5 (20) ------------------------|
+```
+
+- **SUS is G#3 + A#3 held together**, always (press both small black keys with one finger). The other keys keep
+  their jobs: F#3 DIM, G#3 MIN, A#3 MAJ, the extensions 6 m7 M7 on F3 G3 A3, and B3 is the **9**. C4 and C#4 are
+  roots, so there are 20 of them.
+- **The SUS Window** (Options > SUS Window, 30 to 80 ms, 50 by default). One finger never lands on both keys at
+  once. A root pressed while the first of the pair is down and its window still open waits, and plays when the
+  chord is decided: at once when the pair is complete, or when the window closes (then G#3 alone is MIN, A#3 alone
+  MAJ). So you never hear a minor chord turn into a sus chord. A root with no type key down, or with type keys held
+  from before, plays at once. A chord that is already sounding (Advanced, Free, or LOCK with roots held) changes
+  once, at the same moment. In Simple a root pressed before the type keys stays a single note, as in Classic.
+- **Secret chords** (only with Secret Chords on): F#3 + G#3 is m add4, F#3 + A#3 augmented, all three the power
+  chord. With Secret Chords on, a pair waits for the window's close (F#3 could still join). With them off, those
+  pairs are "the last pressed wins", and only G#3 + A#3 combine.
+- **LOCK is on LFO**: tap LFO for LOCK on / off (the LFO light lit), hold it for the LOCK layer (LFO blinks; its
+  bottom line says `LFO: on/off`). A key pressed while LFO is down switches LOCK at that moment. A latched SUS shows
+  as G#3 and A#3 lit; that same pair pressed again on its own switches it off when you let go. In the sound editor
+  LFO is the editor's, and LOCK cannot be switched there.
+- **LATCH is GLO held, then LFO** (LFO held, then GLO, opens the LOCK layer). While LATCH is on the LFO light
+  pulses; with LOCK on as well it pulses between lit and the middle level. Holding GLO on its own never opens the
+  Options: only a quick click does. The screen's `Latch` and `lock` are as before.
+- **The KEY layer** (keys on pick): G#3 and A#3 are its scale keys and nothing else; a one-finger pair picks once.
+- **Picking keys** stay where they are: the loop slots, the naming letters and the KEY layer's tonic are on D4 to G5
+  as in Classic; C4 and C#4 do nothing in those maps.
+- Changing the layout lets go of every key held (a chord you are holding stops); what LOCK latched stays, and shows
+  on the new layout's keys.
+- Loops store chords, not keys, so they play the same in either layout.
 
 ### Key Mode
 
@@ -465,10 +509,16 @@ makes those roots play instead.
 **Keyboard: Chords or Full** (page 2, KNOB 2). `Chords` is the usual keybed: nine chord keys and eighteen roots.
 `Full` turns all 27 keys, F3 to G5, into an ordinary chromatic keyboard playing single notes of the chord part:
 
-- There are no chord keys and no LOCK: B3 is a note, and holding it does not open the LOCK layer. What you had
-  latched with LOCK is kept untouched and is back, lit, when you return to `Chords`.
-- **KNOB 1** on the view changes the **octave** (the same octave as OCT- and OCT+; the read-out says `octave`),
-  since there is no chord to voice. The voicing you had is kept for the Chords keyboard.
+- There are no chord keys and, in Classic, no LOCK: B3 is a note, and holding it does not open the LOCK layer.
+  What you had latched with LOCK is kept untouched and is back, lit, when you return to `Chords`. With the FM-1
+  chord keys LOCK is on LFO and works here too.
+- **KNOB 1** on the view is the **voicing** (until 0.24 it was the octave here); the octave is OCT- and OCT+.
+- **Options > Full K Shorts** On makes F#5 and G5 switches on the Full keyboard (F3 to F5 stay notes, 25 keys).
+  **F#5** brings the layout's chord keys back on the low keys (the Chords keyboard, its roots up to F5); **G5**
+  plays a chord on every key: the chord LOCK latched, else Key Mode's chord for the key, else (nothing latched, Key
+  Mode off) single notes as normal. A quick press toggles; held past the Hold Time, a switch changes only while
+  held. Neither plays a note. G5 starts on with Key Mode on and Key plays Chords (the chords every key played here
+  before), off otherwise. Their lights: faint when off, lit when on.
 - With Key Mode off the keyboard is chromatic. With Key Mode on the key shows on all 27 keys, and **Key plays**
   decides what they do: with `Chords` every key plays the chord that belongs on its note of the scale, as a lone
   root does on the Chords keyboard (in C major, D gives `Dm`, G gives `G`), and a key outside the scale its sus
@@ -1597,6 +1647,10 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **USB Rate** | 44.1 kHz, 44.1 + 48 kHz | 44.1 kHz | 44.1 kHz: the computer records at the FM-1's own rate, as in 0.18. 44.1 + 48 kHz: the computer may also choose 48 kHz, which the FM-1 converts for it; that takes some of its processor time while a recording runs ([USB audio recording](#usb-audio-recording)). The FM-1 leaves USB for a second when you change it |
 | **Dual Core** | Off, On | On (a new unit; an updated unit keeps what it had) | On: the chip's second core shares the work, so more voices sound (below). Takes effect after a restart |
 | **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder, and everything sounds 0.7 ms later (its limiter looks ahead). You can switch while you play to compare |
+| **Chord Keys** | Classic, FM-1 | Classic | which keys are the chord keys: Classic, the Orchid's (DIM MIN MAJ SUS on F#3 G#3 A#3 C#4, LOCK on B3), or FM-1 (SUS = G#3 + A#3, the 9 on B3, C4 and C#4 roots, LOCK on LFO) ([The FM-1 chord keys](#the-fm-1-chord-keys)). Not on the SMK-37 |
+| **SUS Window** | 30 to 80 ms, 5 ms a step | 50 ms | listed with the FM-1 chord keys only: how long a root waits for the second key of G#3 + A#3 ([The FM-1 chord keys](#the-fm-1-chord-keys)) |
+| **Full K Shorts** | Off, On | Off | on the Full keyboard, F#5 brings the chord keys back and G5 plays a chord on every key ([Key Mode](#key-mode)) |
+| **MIDI Keys** | Off, ch 1 to ch 16 | Off | the channel whose notes 53 to 79 press the FM-1's keys F3 to G5 ([MIDI in](#midi-in-usb-and-the-trs-jack)); the MIDI Perform and MIDI Bass channels are skipped |
 | **Version** | | | the firmware's version; the line under it is this FM-1's unit ID (`unit ID A1B2C3D4`, its flash chip's: the same after any install), which tells several FM-1s on one computer apart (`fm1_install.py --unit`, the device manager) |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
 | **Reset Settings** | | | OCT+ twice puts every setting back to its default (below) |
@@ -1743,6 +1797,12 @@ playing and a stop when it stops. PANIC sends all notes off (CC 123).
 | clock, start, continue, stop | with MIDI Clock set to In: the tempo follows the clock and the loop follows start / continue / stop |
 
 A part whose channel is Off ignores MIDI in.
+
+**MIDI Keys** (Options > MIDI Keys, Off by default; new in 0.25): on that channel the notes 53 to 79 press the FM-1's
+own keys F3 to G5, exactly as the keybed does: the chord keys of the layout you chose, the roots, LOCK, the SUS
+Window, the Full keyboard and its shortcuts. The note's velocity plays the key; CC 120 and CC 123 let every key go;
+other notes and messages on that channel do nothing. It cannot be the MIDI Perform or MIDI Bass channel (those are
+skipped, and setting one of them to it switches MIDI Keys off).
 
 ### USB audio recording
 
@@ -2037,10 +2097,10 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 
 | Key | Job |
 | --- | --- |
-| F#3 G#3 A#3 C#4 | DIM MIN MAJ SUS |
-| F3 G3 A3 C4 | 6 m7 M7 9 |
+| F#3 G#3 A#3 C#4 | DIM MIN MAJ SUS (FM-1 chord keys: F#3 G#3 A#3 DIM MIN MAJ, G#3 + A#3 SUS, C#4 a root) |
+| F3 G3 A3 C4 | 6 m7 M7 9 (FM-1: F3 G3 A3 B3, C4 a root) |
 | B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
-| F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4. Key Mode on with Key plays Chords: the key's chords |
+| F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4. Key Mode on with Key plays Chords: the key's chords. Full K Shorts On: F3 to F5 notes, F#5 the chord keys, G5 chords on every key |
 | D4 to G5 | roots |
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |

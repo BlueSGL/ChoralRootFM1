@@ -170,6 +170,8 @@ void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
     dst->usb_in = src->usb_in;
     dst->usb_level = src->usb_level;
     dst->pick_roots = (uint8_t)((dst->pick_roots & (uint8_t)~CRS_PICK_AUTO) | (src->pick_roots & CRS_PICK_AUTO));
+    dst->sticky = (uint8_t)((dst->sticky & (uint8_t)~CRS_STICKY_AUTO) | (src->sticky & CRS_STICKY_AUTO));   /* (the
+                                                    * chord layouts' Options; LATCH, bit 0, is manual) */
     dst->view = (uint8_t)((dst->view & (uint8_t)~CRS_DC_ON) | (src->view & CRS_DC_ON));   /* (Dual Core rides in the
                                                     * view's byte: the view and its lock are manual) */
 }
@@ -205,7 +207,10 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(perform_on, 0, 1);
     CRS_FIX(perform_mode, 0, CRS_NPM - 1);
     CRS_FIX(perf_sel, 0, 6);
-    CRS_FIX(sticky, 0, 1);
+    CRS_FIX(sticky, 0, 0x7F);                      /* (0.25: bit 1 Chord Keys, bit 2 Full K Shorts, bits 3 .. 6 the SUS
+                                                    * Window; bit 7 unknown: the default byte) */
+    if (CRS_SUSWIN_CODE(s) < -4 || CRS_SUSWIN_CODE(s) > 6)   /* (outside 30 .. 80 ms: 50, the other bits kept) */
+        s->sticky = (uint8_t)(s->sticky & 0x07u);
     CRS_FIX(bpm, 20, 300);
     for (m = 0; m < CRS_NPM; m++)
         for (p = 0; p < CRS_NPAR; p++)
@@ -220,7 +225,9 @@ static void crs_sanitize(cr_settings_t *s)
         if (s->midi_ch[i] > 15u) s->midi_ch[i] = d.midi_ch[i];
     }
     CRS_FIX(clock_mode, 0, CRS_CLOCK_IN);
-    CRS_FIX(raw_sound, 0, 1);
+    CRS_FIX(raw_sound, 0, 0x3F);                   /* (0.25: bits 1 .. 5 MIDI Keys' channel) */
+    if (CRS_MIDI_KEYS(s) > 16u)                    /* (no such channel: Off, Raw Chord Sound kept) */
+        s->raw_sound = (uint8_t)(s->raw_sound & 1u);
     if ((s->view & 0x38u) || CRS_VIEW(s) > 5u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; 5 Geek Out 2
                                                     * since 0.22; an unknown bit or view: the default view, unlocked;
                                                     * Dual Core as the record has it: since 0.22 the default is On,
@@ -522,9 +529,9 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
                 cr_set_param(c, (cr_pmode_t)m, p, s->par[m][p]);
     cr_set_perform_mode(c, (cr_pmode_t)s->perform_mode);
     cr_set_perform(c, s->perform_on);
-    cr_set_sticky(c, s->sticky);
+    cr_set_sticky(c, (int)CRS_LATCH(s));           /* (bit 0: the other bits are the UI's Options) */
     cr_set_tempo(c, s->bpm);
-    cr_set_stream(c, CR_STREAM_RAW, s->midi_en[CR_STREAM_RAW] || s->raw_sound);
+    cr_set_stream(c, CR_STREAM_RAW, s->midi_en[CR_STREAM_RAW] || CRS_RAW(s));
     if (o) {
         for (i = 0; i < 3; i++) {
             o->midi_en[i] = s->midi_en[i];
@@ -532,7 +539,7 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
         }
         o->part[CR_STREAM_MAIN] = 0;
         o->part[CR_STREAM_BASS] = 1;
-        o->part[CR_STREAM_RAW] = s->raw_sound ? 0 : CRS_NONE;
+        o->part[CR_STREAM_RAW] = CRS_RAW(s) ? 0 : CRS_NONE;
         o->clock_out = s->clock_mode == CRS_CLOCK_OUT;
         o->clock_in = s->clock_mode == CRS_CLOCK_IN;
     }
@@ -557,7 +564,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
     s->bass_voicing = c->bass_voicing;
     s->perform_on = c->perform_on;
     s->perform_mode = c->perform_mode;
-    s->sticky = c->sticky;
+    s->sticky = (uint8_t)((s->sticky & (uint8_t)~1u) | (c->sticky ? 1u : 0u));   /* (bits 1 .. 6: the UI's) */
     s->bpm = c->bpm;
     for (m = 0; m < CRS_NPM; m++)
         for (p = 0; p < CRS_NPAR; p++)
@@ -567,7 +574,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
             s->midi_en[i] = o->midi_en[i] ? 1u : 0u;
             s->midi_ch[i] = (uint8_t)(o->ch[i] & 15u);
         }
-        s->raw_sound = o->part[CR_STREAM_RAW] != CRS_NONE;
+        s->raw_sound = (uint8_t)((s->raw_sound & (uint8_t)~1u) | (o->part[CR_STREAM_RAW] != CRS_NONE ? 1u : 0u));
         s->clock_mode = o->clock_in ? CRS_CLOCK_IN : o->clock_out ? CRS_CLOCK_OUT : CRS_CLOCK_OFF;
     }
     cr_settings_seal(s);
@@ -761,7 +768,7 @@ static void crs_capture(cr_settings_t *s)
                                                     * Solfege is scale's bit 7, not this byte's) */
     s->perform_on = cs.perform_on;
     s->perf_sel = cs.perf_sel;
-    s->sticky = cs.sticky;
+    s->sticky = CRS_STICKY_BYTE(cs.sticky, cs.layout, cs.full_short, cs.suswin);   /* (docs/CHORD-LAYOUT.md) */
     s->bpm = cs.bpm;
     for (i = 0; i < (uint32_t)CRS_NPM * CRS_NPAR; i++)
         s->par[i / CRS_NPAR][i % CRS_NPAR] = cs.par[i / CRS_NPAR][i % CRS_NPAR];
@@ -770,7 +777,7 @@ static void crs_capture(cr_settings_t *s)
         if (cs.ch[i])
             s->midi_ch[i] = (uint8_t)(cs.ch[i] - 1u);
     }
-    s->raw_sound = cs.raw_sound;
+    s->raw_sound = CRS_RAW_BYTE(cs.raw_sound, cs.midi_keys);
     s->loop_sync = cs.loop_len;
     s->loop_quant = cs.loop_quant;
     s->loop_count_in = cs.loop_count_in;
@@ -1101,12 +1108,16 @@ static void cr_settings_load(void)
     cs.bass_mode = s->bass_mode;
     cs.perform_on = s->perform_on;
     cs.perf_sel = s->perf_sel;
-    cs.sticky = s->sticky;
+    cs.sticky = (uint8_t)CRS_LATCH(s);
+    cs.layout = (uint8_t)(CU_FN_KEYS ? CRS_LAYOUT(s) : 0u);   /* (the SMK-37: hidden, Classic) */
+    cs.full_short = (uint8_t)CRS_FULLSHORT(s);
+    cs.suswin = (uint8_t)CRS_SUSWIN_MS(s);
     for (i = 0; i < (uint32_t)CRS_NPM * CRS_NPAR; i++)
         cs.par[i / CRS_NPAR][i % CRS_NPAR] = s->par[i / CRS_NPAR][i % CRS_NPAR];
     for (i = 0; i < 3u; i++)
         cs.ch[i] = (uint8_t)(s->midi_en[i] ? s->midi_ch[i] + 1u : 0u);
-    cs.raw_sound = s->raw_sound;
+    cs.raw_sound = (uint8_t)CRS_RAW(s);
+    cs.midi_keys = (uint8_t)(CU_FN_KEYS ? CRS_MIDI_KEYS(s) : 0u);
     cr_route.clock_out = o.clock_out;
     cr_route.clock_in = o.clock_in;
     cs.loop_len = s->loop_sync;
@@ -1164,6 +1175,7 @@ static void cr_settings_load(void)
     }
     cu_pos_sync();
     cu_route();
+    cu_fsc_enter();                                /* (Full K Shorts: F#5 off, G5 as Key plays makes it) */
     cu_post_kbd();                                 /* (the split key's note: the UI's, with its octave) */
     cu_set_tempo(s->bpm);
     crs_loaded = 1;
