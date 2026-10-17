@@ -777,7 +777,7 @@ void emu_fw_dump(void)
         printf("  sixth: up %u (Options > 6th with 7th; the engine's %u; the record's bit %u)\n",
                (unsigned)cs.sixth_up, (unsigned)cr.sixth_up, (unsigned)CRS_SIXTH(&t));
         printf("  keys-record: fm1 %u moved %u saved-fm1 %u saved-moved %u (Options > Chord Keys in the record: bit 1 of "
-               "sticky; 0.26's move to FM-1: bit 1 of leds)\n", CRS_LAYOUT(&t), (unsigned)((t.leds & CRS_KEYS_MOVED) != 0u),
+               "sticky; 0.25.1's move to FM-1: bit 1 of leds)\n", CRS_LAYOUT(&t), (unsigned)((t.leds & CRS_KEYS_MOVED) != 0u),
                CRS_LAYOUT(&crs_rec.cr), (unsigned)((crs_rec.cr.leds & CRS_KEYS_MOVED) != 0u));
         printf("  clean: look-ahead %u samples, the limiter's gain %d of 32768\n", (unsigned)CLN_LA, (int)cln_g);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "

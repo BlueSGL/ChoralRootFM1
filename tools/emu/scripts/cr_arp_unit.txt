@@ -15,7 +15,7 @@ dump                          # 3: a root alone held: the arp screen, hopping
 btn D4 up
 wait 500
 dump                          # 4: released: the chord view
-btn GLO down                  # LATCH: GLO held, then LFO (0.26: the seeded record, older than 0.26, is moved to the
+btn GLO down                  # LATCH: GLO held, then LFO (0.25.1: the seeded record, older than 0.25.1, is moved to the
 wait 60                       # FM-1 chord keys, where LFO alone is LOCK)
 btn LFO 80
 btn GLO up

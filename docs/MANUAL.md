@@ -1,6 +1,6 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.25 on the M-VAVE FM-1 (what is new since 0.22 is marked so; 0.25's: [releases/0.25.md](releases/0.25.md)). It is written for someone who owns an
+For ChoralRoot 0.25.1 on the M-VAVE FM-1 (what is new since 0.22 is marked so; 0.25.1's: [releases/0.25.1.md](releases/0.25.1.md)). It is written for someone who owns an
 FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
@@ -140,7 +140,7 @@ white    6     m7    M7    9     C4    D4    E4    F4   ...   G5
 In a layer, a menu or a dialog the root keys may take another job (they pick a slot, type a letter, choose an
 engine). The chord block keeps its job everywhere but in the KEY layer, where MAJ and MIN pick the scale.
 
-This is the **FM-1** layout, made for this keybed and the default since 0.26 (a unit updated from an older version
+This is the **FM-1** layout, made for this keybed and the default since 0.25.1 (a unit updated from an older version
 is moved to it once). **Options > Chord Keys** switches to **Classic**, the Orchid's layout: SUS on C#4, the 9 on C4,
 LOCK on B3, the roots D4 to G5. See [The FM-1 chord keys](#the-fm-1-chord-keys) and
 [The Classic chord keys](#the-classic-chord-keys).
@@ -423,7 +423,7 @@ The small `5` and `add4` are red. Extensions stack on top as usual.
 
 ### The FM-1 chord keys
 
-The chord keys of this manual, the default since 0.26 (**Options > Chord Keys: FM-1**; new in 0.24, where Classic was
+The chord keys of this manual, the default since 0.25.1 (**Options > Chord Keys: FM-1**; new in 0.24, where Classic was
 the default). Updating from an older version moves a unit to them once, whatever it had; after that the choice in
 Options stays.
 
@@ -1675,7 +1675,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Play Style** | Simple, Advanced, Free | Simple | what chord keys do while a root is held ([Play styles](#play-styles)) |
 | **Extension Addition** | Add Note, Play Chord | Add Note | in Advanced and Free: an extension adds its note, or replays the chord |
 | **Secret Chords** | Off, Simple, All | Off | two chord types together make a third chord ([Secret chords](#secret-chords)) |
-| **Chord Keys** | FM-1, Classic | FM-1 (since 0.26; an updated unit is moved to it once) | which keys are the chord keys: FM-1 (SUS = G#3 + A#3, the 9 on B3, C4 and C#4 roots, LOCK on LFO; [The FM-1 chord keys](#the-fm-1-chord-keys)) or Classic, the Orchid's (DIM MIN MAJ SUS on F#3 G#3 A#3 C#4, the 9 on C4, LOCK on B3; [The Classic chord keys](#the-classic-chord-keys)). Not on the SMK-37 |
+| **Chord Keys** | FM-1, Classic | FM-1 (since 0.25.1; an updated unit is moved to it once) | which keys are the chord keys: FM-1 (SUS = G#3 + A#3, the 9 on B3, C4 and C#4 roots, LOCK on LFO; [The FM-1 chord keys](#the-fm-1-chord-keys)) or Classic, the Orchid's (DIM MIN MAJ SUS on F#3 G#3 A#3 C#4, the 9 on C4, LOCK on B3; [The Classic chord keys](#the-classic-chord-keys)). Not on the SMK-37 |
 | **SUS Window** | 30 to 80 ms, 5 ms a step | 30 ms | listed with the FM-1 chord keys only: how long a root waits for the second key of G#3 + A#3 ([The FM-1 chord keys](#the-fm-1-chord-keys)) |
 | **Full K Shorts** | Off, On | Off | on the Full keyboard, F#5 brings the chord keys back and G5 plays a chord on every key ([Key Mode](#key-mode)) |
 | **MIDI Keys** | Off, ch 1 to ch 16 | Off | the channel whose notes 53 to 79 press the FM-1's keys F3 to G5 ([MIDI in](#midi-in-usb-and-the-trs-jack)); the MIDI Perform and MIDI Bass channels are skipped |
@@ -2046,7 +2046,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | Some keys do nothing | Key Mode is on with Key plays = Notes: they are outside the scale | tap KEY, or KEY layer page 2 (Key plays, or Snap) |
 | Chord keys stay on | LOCK is on (LFO lit; Classic chord keys: B3 lit) | tap LFO (Classic: B3) |
 | Notes keep sounding | LATCH is on (LFO pulsing), or Strum's Hold | GLO held + LFO (Classic: tap LFO); PANIC stops everything |
-| SUS will not come, or C4 / C#4 play roots | the FM-1 chord keys (the default since 0.26): SUS is G#3 + A#3, the 9 is B3 | press G#3 and A#3 together, or Options > Chord Keys: Classic |
+| SUS will not come, or C4 / C#4 play roots | the FM-1 chord keys (the default since 0.25.1): SUS is G#3 + A#3, the 9 is B3 | press G#3 and A#3 together, or Options > Chord Keys: Classic |
 | The chord sound is silent, the bass plays | Bass Behaviour is Solo (`Bass Solo`) | BASS layer, another behaviour, or tap BASS |
 | No bass | the bass is off (a new unit, a reset, or you switched it off) | tap BASS |
 | The bass layer's keys make no sound | in that layer the white keys pick the behaviour | close the layer to play |

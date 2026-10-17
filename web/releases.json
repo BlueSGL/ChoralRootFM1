@@ -8,6 +8,25 @@
   },
   "releases": [
     {
+      "version": "0.25.1",
+      "date": "2026-10-16",
+      "tag": "v0.25.1",
+      "sha256": "ef57eaccf6e7452317a1603b8de09662a0a74b77828ecd3f20b896ffe22504d5",
+      "sha256_1core": "1dcac28c65d88888fc690f887971d419cd63014131476bdb73aca4f746bf0902",
+      "title": "The FM-1 chord keys are the default",
+      "bullets": [
+        "The FM-1 chord keys are now the layout every FM-1 plays: DIM MIN MAJ on F#3 G#3 A#3, SUS = G#3 + A#3 with one finger, 6 m7 M7 9 on F3 G3 A3 B3, roots from C4, LOCK on the LFO button.",
+        "Your FM-1 switches to them once, at the first start after the update, whatever it had before; LATCH, the SUS Window, your sounds, loops and favorites stay as they were.",
+        "With LOCK on, the chord you had latched stays latched: a latched SUS lights G#3 and A#3, a latched 9 lights B3.",
+        "Classic, the Orchid's layout, is one Option away: Options > Chord Keys. Choose it once and it stays, through power cycles and later updates.",
+        "Everything else is 0.25: the same sound, GRAIN's MORPH blend included."
+      ],
+      "notes": [
+        "Updating from 0.25, 0.24 or 0.23 keeps your settings, sounds, loops and favorites; only the chord keys change, to FM-1.",
+        "A new FM-1, Options > Reset Settings and Flash Data start on the FM-1 chord keys."
+      ]
+    },
+    {
       "version": "0.25",
       "date": "2026-10-16",
       "tag": "v0.25",
@@ -24,7 +43,15 @@
       "notes": [
         "Updating from 0.24 keeps your settings, sounds, loops and favorites; nothing outside GRAIN changes.",
         "GRAIN takes a few percent more of the processor than in 0.24."
-      ]
+      ],
+      "going_back": {
+        "short": "Your settings, sounds, loops and favorites stay. 0.25 plays the chord keys your settings hold: FM-1 after the switch, Classic if you chose it since.",
+        "points": [
+          "Options > LEDs reads Glow on 0.25 (a Stock choice comes back when you set it again).",
+          "Coming back to 0.25.1 after 0.25 has saved a setting counts as an update again: the FM-1 switches to the FM-1 chord keys once more.",
+          "A backup made with 0.25 restores onto the FM-1 chord keys on 0.25.1; one made with 0.25.1 restores the layout it holds."
+        ]
+      }
     },
     {
       "version": "0.24",

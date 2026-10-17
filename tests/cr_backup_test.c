@@ -1111,9 +1111,9 @@ int main(void)
 #undef NRET
     }
 
-    /* ---- 0.26: FM-1 is the default Chord Keys, and a restored older settings object moves to it once (cr_settings.h
+    /* ---- 0.25.1: FM-1 is the default Chord Keys, and a restored older settings object moves to it once (cr_settings.h
      * CRS_KEYS_MOVED). A 0.25 backup with Classic, LATCH, the SUS Window at 60 ms and LEDs Stock (leds 1: no mark):
-     * after the restart FM-1, the rest as the backup had it. A 0.26 backup with Classic chosen (the mark): Classic, and
+     * after the restart FM-1, the rest as the backup had it. A 0.25.1 backup with Classic chosen (the mark): Classic, and
      * Classic again after a power cycle ---- */
     {
         static persist_t pv;
@@ -1136,17 +1136,17 @@ int main(void)
         CHECK(cs.layout == 1u && cs.sticky == 1u && cs.suswin == 60u && cs.leds == 1u && (crs_rec.cr.leds & CRS_KEYS_MOVED),
               "0.25 backup with Classic: after the restart FM-1, LATCH, 60 ms and LEDs Stock kept, the record marked (%u %u %u %u)",
               (unsigned)cs.layout, (unsigned)cs.sticky, (unsigned)cs.suswin, (unsigned)cs.leds);
-        pv.cr.leds = CRS_LEDS_STOCK | CRS_KEYS_MOVED;   /* a 0.26 backup: Classic chosen after the move */
+        pv.cr.leds = CRS_LEDS_STOCK | CRS_KEYS_MOVED;   /* a 0.25.1 backup: Classic chosen after the move */
         cr_settings_seal(&pv.cr);
         rc = t_put(1, (const uint8_t *)&pv, sizeof pv);
         cr_restore_lock = 0;
         power_on();
         cr_ui_init();
         CHECK(rc == 0 && cs.layout == 0u && cs.sticky == 1u && cs.leds == 1u,
-              "0.26 backup with Classic chosen: Classic after the restart (rc %d, %u)", rc, (unsigned)cs.layout);
+              "0.25.1 backup with Classic chosen: Classic after the restart (rc %d, %u)", rc, (unsigned)cs.layout);
         power_on();
         cr_ui_init();
-        CHECK(cs.layout == 0u, "0.26 backup with Classic chosen: Classic after a second power cycle (the move never runs twice)");
+        CHECK(cs.layout == 0u, "0.25.1 backup with Classic chosen: Classic after a second power cycle (the move never runs twice)");
     }
 
     /* ---- DEBUG (73): version 1, a count, count x u32; the stub's key samples are its last four values ---- */

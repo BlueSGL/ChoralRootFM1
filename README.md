@@ -110,7 +110,7 @@ each part:
 - **Chords**: the chord block on the keybed (DIM MIN MAJ on the black keys F#3 G#3 A#3, SUS = G#3 + A#3 together,
   6 m7 M7 9 on the white keys F3 G3 A3 B3, LOCK on the LFO button), roots on C4..G5, voicing on KNOB 1, Key Mode, the
   Simple / Advanced / Free play styles, secret chords, LATCH (GLO + LFO). That is the FM-1 layout, the default since
-  0.26; Options > Chord Keys: Classic is the Orchid's (SUS on C#4, the 9 on C4, B3 = LOCK, roots D4..G5).
+  0.25.1; Options > Chord Keys: Classic is the Orchid's (SUS on C#4, the 9 on C4, B3 = LOCK, roots D4..G5).
 - **Layers** that lock open on a hold (KEY, PERF, FX, BASS, SEQ for the metronome, LOOP), each a picker over a row of four knob
   cells; OCT- or HOME closes them.
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
@@ -137,6 +137,9 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.25.1** ([docs/releases/0.25.1.md](docs/releases/0.25.1.md)): the FM-1 chord keys are the default
+  (SUS = G#3 + A#3, the 9 on B3, roots from C4, LOCK on LFO); every FM-1 switches to them once at the update, LOCK
+  and the latched chord carried over; Classic is in Options > Chord Keys.
 - **New in 0.25** ([docs/releases/0.25.md](docs/releases/0.25.md)): GRAIN's MORPH blends sources A and B into one
   sound the grains play, smoothly under ENV 2, the LFOs and the matrix; TONE, MOTION, SEED and TYPE change a source as
   they turn, the grains playing on.

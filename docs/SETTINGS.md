@@ -52,7 +52,7 @@ from a layer: it goes with the layer (manual).
 | MIDI Clock | Options | block `clock_mode` | **automatic** |
 | Motion | Options | block `motion` | **automatic** |
 | Chord Names (0.20) | Options | block `pick_roots` bit 3 | **automatic** |
-| LEDs | Options | block `leds` bit 0 (bit 1: 0.26's move to the FM-1 chord keys, `CRS_KEYS_MOVED`, written with it) | **automatic** |
+| LEDs | Options | block `leds` bit 0 (bit 1: 0.25.1's move to the FM-1 chord keys, `CRS_KEYS_MOVED`, written with it) | **automatic** |
 | Hold Time | Options | Felucca's `bold` (HOLD), in the same flash object | **automatic** |
 | USB Record, USB Level | Options | block `usb_in`, `usb_level` | **automatic** |
 | USB Rate (0.19) | Options | block `pick_roots` bit 2 | **automatic** |
@@ -301,14 +301,14 @@ The block has its own header:
 | bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range; Solfège is `scale`'s bit 7, not this byte's) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
 | perform_on, perform_mode, perf_sel | 0/1, Strum..Harp, the PERF layer's entry 0..6 | off, Strum, 0 |
-| sticky | bit 0: LATCH (manual). **0.24, docs/CHORD-LAYOUT.md** (automatic, `CRS_STICKY_AUTO` 0x7E): bit 1 Options > Chord Keys FM-1 (`CRS_LAYOUT_FM1`), bit 2 Full K Shorts On (`CRS_FULL_SHORT`), bits 3 .. 6 the SUS Window as (ms - 30) / 5, 0 .. 10 = 30 .. 80 ms (`CRS_SUSWIN_MS`; 30 the owner's default); a code above 10: 30 ms, the other bits kept; bit 7 unknown: the byte's default. No version (0.24: 0 was every default). Every older firmware checks the byte with CRS_FIX(sticky, 0, 1): a byte with a new bit set reads as its default there (LATCH off), nothing else touched, so it starts in Classic. The engine takes bit 0 alone (`cr_settings_apply` / `cr_settings_capture` merge it). **0.26: FM-1 is the default** (bit 1 set by `cr_settings_defaults`), and a record without `leds`' mark is moved to it once ("0.26: FM-1 the default" below) | off; **FM-1** (0.26; Classic in 0.24 / 0.25; the SMK-37: Classic, hidden), Off, 30 ms |
+| sticky | bit 0: LATCH (manual). **0.24, docs/CHORD-LAYOUT.md** (automatic, `CRS_STICKY_AUTO` 0x7E): bit 1 Options > Chord Keys FM-1 (`CRS_LAYOUT_FM1`), bit 2 Full K Shorts On (`CRS_FULL_SHORT`), bits 3 .. 6 the SUS Window as (ms - 30) / 5, 0 .. 10 = 30 .. 80 ms (`CRS_SUSWIN_MS`; 30 the owner's default); a code above 10: 30 ms, the other bits kept; bit 7 unknown: the byte's default. No version (0.24: 0 was every default). Every older firmware checks the byte with CRS_FIX(sticky, 0, 1): a byte with a new bit set reads as its default there (LATCH off), nothing else touched, so it starts in Classic. The engine takes bit 0 alone (`cr_settings_apply` / `cr_settings_capture` merge it). **0.25.1: FM-1 is the default** (bit 1 set by `cr_settings_defaults`), and a record without `leds`' mark is moved to it once ("0.25.1: FM-1 the default" below) | off; **FM-1** (0.25.1; Classic in 0.24 / 0.25; the SMK-37: Classic, hidden), Off, 30 ms |
 | bpm | 20..300 | 120 |
 | par[5][11] | per mode, the engine's `CR_PAR_MIN`..`MAX` | design.md §21 (= `cr_init`) |
 | loop_sync, loop_quant, loop_count_in, loop_level | 0..5, 0..5, 0/1, 0..100 | Free, none, **on** (the count-in), 100 (the looper: docs/LOOPER.md) |
 | midi_en[3], midi_ch[3] | per stream MAIN BASS RAW | on, on, **RAW off**; channels 1 / 2 / 3 |
 | clock_mode | Off / **Out** / In | **Out** (Orchid sends clock) |
 | raw_sound | bit 0: RAW also plays part 0. **0.24**: bits 1 .. 5 Options > MIDI Keys, 0 Off, 1 .. 16 the channel (`CRS_MIDI_KEYS`; above 16: Off, bit 0 kept). An older firmware's CRS_FIX(raw_sound, 0, 1) reads a byte with a channel as Raw Chord Sound Off. The engine takes bit 0 alone | off; MIDI Keys Off |
-| view, motion, leds | view bits 0..2: Chord / Keyboard / Notes / Geek Out / Scope / **Geek Out 2 (5; 0.22**: four meters, docs/DUALCORE.md "Geek Out 2"; a firmware up to 0.21 finds 5 out of range and reads Chord) (Options > View, HOME held's menu); **v9: bit 7 the view lock** (`CRS_VIEW` / `CRS_VIEW_LOCK` / `CRS_VIEW_BYTE`; locked: HOME tap never cycles the view); **v12: bit 6 Options > Dual Core On** (`CRS_DC_ON`, `CRS_DUALCORE`; set = On: core 1 started at power-on, docs/DUALCORE.md; v11, 0.15, had the bit the other way round: set = Off, On the default), another bit or view: the default; Full/Calm/Off, Glow/Stock (`leds` bit 0, `CRS_LEDS`; **0.26: bit 1 `CRS_KEYS_MOVED`**, the record moved to the FM-1 chord keys: "0.26: FM-1 the default" below; 0 .. 3 in range, another value: the default byte) | Chord, unlocked, Dual Core **On** (0.22, a unit with no record and Reset Settings; Off 0.16 .. 0.21; a view byte out of range keeps the record's Dual Core), Full, Glow; a v1..v8 record: its view, unlocked; a v1..v11 record: Dual Core Off, whatever its bit 6 |
+| view, motion, leds | view bits 0..2: Chord / Keyboard / Notes / Geek Out / Scope / **Geek Out 2 (5; 0.22**: four meters, docs/DUALCORE.md "Geek Out 2"; a firmware up to 0.21 finds 5 out of range and reads Chord) (Options > View, HOME held's menu); **v9: bit 7 the view lock** (`CRS_VIEW` / `CRS_VIEW_LOCK` / `CRS_VIEW_BYTE`; locked: HOME tap never cycles the view); **v12: bit 6 Options > Dual Core On** (`CRS_DC_ON`, `CRS_DUALCORE`; set = On: core 1 started at power-on, docs/DUALCORE.md; v11, 0.15, had the bit the other way round: set = Off, On the default), another bit or view: the default; Full/Calm/Off, Glow/Stock (`leds` bit 0, `CRS_LEDS`; **0.25.1: bit 1 `CRS_KEYS_MOVED`**, the record moved to the FM-1 chord keys: "0.25.1: FM-1 the default" below; 0 .. 3 in range, another value: the default byte) | Chord, unlocked, Dual Core **On** (0.22, a unit with no record and Reset Settings; Off 0.16 .. 0.21; a view byte out of range keeps the record's Dual Core), Full, Glow; a v1..v8 record: its view, unlocked; a v1..v11 record: Dual Core Off, whatever its bit 6 |
 | palette | gfx.c index, 0xFF = MOD | **MOD** |
 | fx_on | 0/1 | on |
 | chord_sound | v6: the chord part's sound, (engine << 8) \| its pool position (docs/PRESETS.md); 0xFFFF = the UI's default. v1..5: an old list position, read as the default | FM6 TINE EP |
@@ -622,24 +622,24 @@ A session is used at power-on only next to the settings it was written beside:
   firmware erased) it is left alone and the unit starts from the settings: `session: .. not these settings'` in the
   emulator's dump (`test_persist.sh`: the flash of the session run with its settings object rewritten as v14).
 
-### 0.26: FM-1 the default
+### 0.25.1: FM-1 the default
 
 **Every unit moved to the FM-1 chord keys once, with no version.** The owner, 2026-10-16: "the new FM-1
 chord key layout is significantly better on this device than the classic, let's make it the default", then "Units
 from old should get put on the new chord key layout". So `cr_settings_defaults` sets `sticky` bit 1 (a unit with no
 record, Flash Data's erase, SAFE MODE's defaults, Options > Reset Settings), and `cr_settings_import` moves every
-record that no 0.26 firmware wrote to FM-1, whatever it holds: 0.23 and older (no Chord Keys), 0.24 / 0.25 with
+record that no 0.25.1 firmware wrote to FM-1, whatever it holds: 0.23 and older (no Chord Keys), 0.24 / 0.25 with
 Classic or FM-1. What tells the two apart is **bit 1 of `leds`** (`CRS_KEYS_MOVED`), set in the defaults and by the
 move, and written with every save after it (the byte is automatic, `cr_settings_auto` takes it whole; `crs_capture`
 keeps the record's mark beside the UI's LEDs bit). A record with the mark keeps the layout it holds, so a player who
 chooses Classic after the move keeps it, across power cycles and later updates (`tests/cr_settings_test.c
-t_keys_default`; `tools/emu/test_persist.sh`, "0.26: FM-1 is the default chord keys"). The move changes `sticky` bit 1
+t_keys_default`; `tools/emu/test_persist.sh`, "0.25.1: FM-1 is the default chord keys"). The move changes `sticky` bit 1
 and the mark only: LATCH, Full K Shorts, the SUS Window, LEDs Stock and every other field are kept, and the import's
 result is unchanged (a 0.25 record is still **current**, rc 1).
 
 - **Why not a version.** A v16 would do the same job, and every 0.18 .. 0.25 firmware already reads a newer version
   of this size. But the session is applied at power-on only beside a block read as current, or one whose object is
-  byte for byte the one it was saved beside (`bind`, above): a v15 block read by 0.26 would be "migrated", and so
+  byte for byte the one it was saved beside (`bind`, above): a v15 block read by 0.25.1 would be "migrated", and so
   would a v16 block read by 0.25 after a downgrade. On a unit where an Option changed after the last SAVE (the Options
   are written by themselves, the session only by SAVE) both would drop the session: the sounds, Bass on, LOCK and its
   latch. The mark costs one bit and leaves rc and `bind` as they were.
@@ -649,7 +649,7 @@ result is unchanged (a 0.25 record is still **current**, rc 1).
   `sticky`'s bit 7 would cost LATCH and the three chord layout Options there, `raw_sound`'s Raw Chord Sound and MIDI
   Keys, `fx_on` the effects.
 - **The switch runs once.** The move needs a record without the mark. Every record this firmware writes has it (the
-  defaults, the move, a save), so a record written by 0.26 or later is never moved again. Until the first save after
+  defaults, the move, a save), so a record written by 0.25.1 or later is never moved again. Until the first save after
   the update the record in flash is still the older one, and each power-on moves it again in RAM, to the same FM-1:
   nothing is written for the move itself (`test_persist.sh`: 0 writes), and the first save (any Option, SAVE held)
   stores FM-1 with the mark. The only record moved a second time is one an older firmware wrote again after a
@@ -662,8 +662,8 @@ result is unchanged (a 0.25 record is still **current**, rc 1).
   the byte is out of range, so LATCH reads off (they play their own Classic keys); LEDs Glow as above. Nothing else
   changes and nothing breaks; the version is still 15, so the session is applied as before.
 - **A backup restore** goes through the same import (`cr_backup.c crb_commit`): an older backup's settings object (no
-  mark) restores onto FM-1 with the rest as the backup has it, and a backup made by 0.26 restores what it holds,
-  Classic included (`tests/cr_backup_test.c`, "0.26: FM-1 is the default Chord Keys").
+  mark) restores onto FM-1 with the rest as the backup has it, and a backup made by 0.25.1 restores what it holds,
+  Classic included (`tests/cr_backup_test.c`, "0.25.1: FM-1 is the default Chord Keys").
 - **LOCK across the move.** LOCK and its latch are the session's (`lock`, `latched`), and `latched` is a set of chord
   types (`cr_mod_t`: DIM .. 9), not of keys. So a unit updated with LOCK on keeps it on and keeps the same chord
   latched, which the FM-1 keys show where they are now: a latched SUS on G#3 + A#3, a latched 9 on B3, LOCK's light on

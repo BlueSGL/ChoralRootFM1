@@ -6,7 +6,7 @@
 # ("touch: key 26 vel 67 sensed": the probe's curve, quantised); a lean of 60 % on a held D4 after it has settled: aftertouch up to ~73
 # ("touch: at N"; 60 % of the span, smoothed), eased to 0: back to 0. Velocity Curve +3 (entry 7): the same press
 # (30 on Velo's scale) reads 15.
-keys classic                  # (0.26: FM-1 is the default; this script was written for the Classic chord keys)
+keys classic                  # (0.25.1: FM-1 is the default; this script was written for the Classic chord keys)
 wait 600
 btn D4 down 30
 wait 300

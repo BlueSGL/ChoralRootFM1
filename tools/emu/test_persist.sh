@@ -822,8 +822,8 @@ set -- $(qw "$Q1" 7)
     ok "SAVE held three times under a held chord: the third session save has to erase and does so at once (the player's own press, as before), and the settings' save erases (3y52: not erased ahead): two erases, in the chord; not counted as near (that is for what the unit starts itself)" \
     || bad "quiet writes, SAVE held: $(sv "$QS" 1) / $(qw "$QS" 1) / stalls $(qs "$QS" 1)"
 
-# ---- 0.26: FM-1 is the default chord keys, and every unit moves to them once (cr_settings.h CRS_KEYS_MOVED, docs/
-# SETTINGS.md "0.26: FM-1 the default"). A fresh unit (run 3 above, no flash) is FM-1. keys_old_set.txt on a fresh flash:
+# ---- 0.25.1: FM-1 is the default chord keys, and every unit moves to them once (cr_settings.h CRS_KEYS_MOVED, docs/
+# SETTINGS.md "0.25.1: FM-1 the default"). A fresh unit (run 3 above, no flash) is FM-1. keys_old_set.txt on a fresh flash:
 # the Classic keys, LOCK on with SUS + 9 latched, SAVE held. The block rewritten as 0.25 with Classic, 0.25 with FM-1
 # and 0.23 wrote it (tools/emu/seed_keys.py: no mark), the session as it was: each powers on FM-1 with LOCK and the
 # latch kept (the latch is a set of chord types, shown on the new keys), and writes nothing. On the 0.25 Classic one,

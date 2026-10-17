@@ -115,7 +115,7 @@ void cr_settings_defaults(cr_settings_t *s)
                                                     * told from 0.16 .. 0.21's default (docs/DUALCORE.md) */
     s->fx_on = 1;
 #if !BOARD_SMK37
-    s->sticky = CRS_LAYOUT_FM1;                    /* Options > Chord Keys FM-1 (0.26, the owner, 2026-10-16: "let's
+    s->sticky = CRS_LAYOUT_FM1;                    /* Options > Chord Keys FM-1 (0.25.1, the owner, 2026-10-16: "let's
                                                     * make it the default"): a unit with no record, Flash Data, Reset
                                                     * Settings. Moved already (CRS_KEYS_MOVED): the layout a record of
                                                     * this firmware holds is the player's (the SMK-37: Classic, hidden) */
@@ -241,7 +241,7 @@ static void crs_sanitize(cr_settings_t *s)
                                                     * and a record's Off is never turned On for it) */
         s->view = (uint8_t)(s->view & CRS_DC_ON);
     CRS_FIX(motion, 0, 2);
-    CRS_FIX(leds, 0, (int)(CRS_LEDS_STOCK | CRS_KEYS_MOVED));   /* (0.26: bit 1 the move to FM-1, CRS_KEYS_MOVED) */
+    CRS_FIX(leds, 0, (int)(CRS_LEDS_STOCK | CRS_KEYS_MOVED));   /* (0.25.1: bit 1 the move to FM-1, CRS_KEYS_MOVED) */
     CRS_FIX(fx_on, 0, 1);
     CRS_FIX(metro_on, 0, 1);
     CRS_FIX(metro_sig, 0, 2);
@@ -376,7 +376,7 @@ int cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n)
     }
     crs_sanitize(s);
 #if !BOARD_SMK37
-    if (!(s->leds & CRS_KEYS_MOVED))               /* 0.26: a record no firmware since 0.26 has written (any version: 0.23
+    if (!(s->leds & CRS_KEYS_MOVED))               /* 0.25.1: a record no firmware since 0.25.1 has written (any version: 0.23
                                                     * and older have no Chord Keys, 0.24 / 0.25 Classic or FM-1): FM-1,
                                                     * once; the mark keeps a later Classic (cr_settings.h CRS_KEYS_MOVED).
                                                     * The rest of the byte and the record as they were; rc unchanged (a

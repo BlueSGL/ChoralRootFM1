@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """The Chord Keys bits of an emulator flash file's settings object: a ChoralRoot block as an older firmware wrote it
-(0.26 moves every such record to the FM-1 chord keys once: cr_settings.h CRS_KEYS_MOVED; tools/emu/test_persist.sh).
+(0.25.1 moves every such record to the FM-1 chord keys once: cr_settings.h CRS_KEYS_MOVED; tools/emu/test_persist.sh).
 
   python3 tools/emu/seed_keys.py FLASH AS       rewrite every valid copy's block as firmware AS wrote it, from what it
                                                 holds: 0.25-classic (Chord Keys Classic), 0.25-fm1 (FM-1), 0.23 (no
-                                                Chord Keys: sticky keeps LATCH alone); each without 0.26's mark (bit 1
+                                                Chord Keys: sticky keeps LATCH alone); each without 0.25.1's mark (bit 1
                                                 of leds), the version 15 as all three wrote it. Prints the copies changed
   python3 tools/emu/seed_keys.py FLASH          print "STICKY LEDS" (hex) of the newest valid copy (or "none")
 The object: sectors 0xFC000 / 0xFD000, storage.c's 32-byte header (magic "FELU", type, slot, seq, len, the payload's

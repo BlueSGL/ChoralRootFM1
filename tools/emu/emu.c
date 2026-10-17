@@ -883,7 +883,7 @@ static int probe_frames;                         /* script `probe N`: the next N
  *                           redraw composed. With EMU_STRIP_US (README)
  *   dump | rec | window NAME | quit       End's print, F12's LCD recording, a window shot, stop here
  *   keys classic|fm1        (anywhere; read at power-on) a unit with no settings record starts with Options > Chord
- *                           Keys Classic (as one whose player chose it) or FM-1 (the default since 0.26); a flash
+ *                           Keys Classic (as one whose player chose it) or FM-1 (the default since 0.25.1); a flash
  *                           that holds a record keeps its own. The scripts written for the Classic keys say classic
  * Also accepted (older scripts): press KEY [MS], tap, hold / down, release / up, turn KNOB N, and a leading
  * "<ms>" for an absolute time ("1200 down A"). Names: a computer key wins for key/press/hold, a panel control

@@ -1577,7 +1577,7 @@ static void t_layout(void)
     cr_settings_out_t o;
     cr_settings_defaults(&d);
     ok(d.sticky == CRS_LAYOUT_FM1 && CRS_LAYOUT(&d) == 1u && CRS_FULLSHORT(&d) == 0u && CRS_SUSWIN_MS(&d) == 30u &&
-       !CRS_LATCH(&d), "defaults: FM-1 (0.26), Full K Shorts Off, the SUS Window 30 ms, LATCH off");
+       !CRS_LATCH(&d), "defaults: FM-1 (0.25.1), Full K Shorts Off, the SUS Window 30 ms, LATCH off");
     ok(d.raw_sound == 0 && CRS_MIDI_KEYS(&d) == 0u, "defaults: MIDI Keys Off (the byte 0)");
     s = d;
     s.sticky = CRS_STICKY_BYTE(1, 1, 1, 30);
@@ -1629,7 +1629,7 @@ static void t_layout(void)
        "an older firmware: a byte with a new bit is out of its range (LATCH off, Raw Chord Sound off there); with the defaults it is one it knows");
 }
 
-/* 0.26: FM-1 is the default Chord Keys; every record no 0.26 firmware wrote moves to FM-1 once, marked in bit 1 of
+/* 0.25.1: FM-1 is the default Chord Keys; every record no 0.25.1 firmware wrote moves to FM-1 once, marked in bit 1 of
  * `leds` (cr_settings.h CRS_KEYS_MOVED); a marked record keeps its layout */
 static cr_settings_t keys_rec(unsigned version, uint8_t sticky, uint8_t leds)
 {
@@ -1701,10 +1701,10 @@ static void t_keys_default(void)
      * 0.23 and older sticky 0 .. 1 (a byte with FM-1 out of range: LATCH off). Their next write has no mark */
     s = d;
     ok(s.leds > 1u && CRS_LAYOUT(&s) == 1u && s.sticky <= 0x7Fu && s.sticky > 1u,
-       "an older firmware on a 0.26 record: LEDs Glow (out of 0 .. 1), 0.24 / 0.25 the layout stored, 0.23 LATCH off");
+       "an older firmware on a 0.25.1 record: LEDs Glow (out of 0 .. 1), 0.24 / 0.25 the layout stored, 0.23 LATCH off");
     s = keys_rec(15, CRS_STICKY_BYTE(0, 0, 0, 30), CRS_LEDS_STOCK);   /* 0.25 saved Classic after a downgrade */
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_LAYOUT(&r) == 1u,
-       "a downgrade that saved, then 0.26 again: the record comes from an older firmware and moves to FM-1 again");
+       "a downgrade that saved, then 0.25.1 again: the record comes from an older firmware and moves to FM-1 again");
 }
 
 int main(void)

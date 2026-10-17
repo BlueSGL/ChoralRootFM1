@@ -1,4 +1,4 @@
-# test_persist.sh, the move to the FM-1 chord keys (0.26), run 1 (a fresh flash file): a unit on the Classic chord
+# test_persist.sh, the move to the FM-1 chord keys (0.25.1), run 1 (a fresh flash file): a unit on the Classic chord
 # keys with LOCK on and SUS + 9 latched (B3 tap; C#4 + C4 held together and let go), SAVE held: the settings and the
 # session written (dump 1), quit. test_persist.sh then rewrites the settings block as 0.25 (Classic or FM-1) and 0.23
 # wrote it (tools/emu/seed_keys.py), the session left as it is

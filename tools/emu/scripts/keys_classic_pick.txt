@@ -1,4 +1,4 @@
-# test_persist.sh, the move to the FM-1 chord keys (0.26), run 3 (run 2's flash, moved): Options > Chord Keys back to
+# test_persist.sh, the move to the FM-1 chord keys (0.25.1), run 3 (run 2's flash, moved): Options > Chord Keys back to
 # Classic (the 4th entry), closed; quiet for 4 s: the Option written by itself (dump 1), with the record's mark. The
 # relaunch (keys_classic_check.txt) is Classic: the move never runs twice
 wait 800

@@ -5771,12 +5771,12 @@ release that does not exist yet). No device.
 the new FM-1 chord key layout is significantly better on this device than the classic, let's make it the default",
 then "Units from old should get put on the new chord key layout").** `cr_settings_defaults` sets `sticky` bit 1
 (`CRS_LAYOUT_FM1`): a unit with no record, Flash Data, SAFE MODE's defaults and Reset Settings start in FM-1.
-`cr_settings_import` moves every record no 0.26 firmware wrote (0.23 and older, 0.24 / 0.25 with Classic or FM-1) to
+`cr_settings_import` moves every record no 0.25.1 firmware wrote (0.23 and older, 0.24 / 0.25 with Classic or FM-1) to
 FM-1, once, and marks it in **bit 1 of `leds`** (`CRS_KEYS_MOVED`; the defaults have it too); a marked record keeps
 its layout, so Classic chosen after the move stays, across power cycles and later updates. The move touches
 `sticky` bit 1 and the mark only (LATCH, Full K Shorts, the SUS Window, LEDs Stock kept) and leaves the import's
-result as it was (a 0.25 record is still current). **No version**, and why (docs/SETTINGS.md "0.26: FM-1 the
-default"): a v16 would make 0.26's first start, and 0.25 / 0.24 after a downgrade, read the block as migrated, and the
+result as it was (a 0.25 record is still current). **No version**, and why (docs/SETTINGS.md "0.25.1: FM-1 the
+default"): a v16 would make 0.25.1's first start, and 0.25 / 0.24 after a downgrade, read the block as migrated, and the
 session is then applied only when the settings object is byte for byte the one it was saved beside (`bind`): every
 unit with an Option changed after its last SAVE would lose its session (sounds, Bass, LOCK and its latch) at the
 update. The mark costs one bit; `leds` because an older firmware's `CRS_FIX(leds, 0, 1)` then reads LEDs Glow and
@@ -5786,13 +5786,13 @@ mark goes with every save (`crs_capture` keeps the record's mark beside the UI's
 since), LEDs Glow; 0.23 and older read `sticky` out of their 0 .. 1 range: LATCH off, their Classic keys; nothing
 breaks, the session is applied as before. An older firmware's save drops the mark, so coming back moves that record
 again (an update from an older firmware). **Backups**: the restore goes through the import: an older backup lands
-on FM-1, a 0.26 one restores what it holds. **LOCK across the move**: the latch is the session's set of `cr_mod_t`,
+on FM-1, a 0.25.1 one restores what it holds. **LOCK across the move**: the latch is the session's set of `cr_mod_t`,
 not of keys, so it is kept and shown on the FM-1 keys (a latched SUS on G#3 + A#3, the 9 on B3, LOCK's light on
 LFO); nothing is held at power-on, so nothing is released. **The SMK-37** (Chord Keys hidden): `BOARD_SMK37` neither
 sets the bit nor moves a record. **Tests**: `tests/cr_settings_test.c t_keys_default` (the defaults, no record,
 Reset Settings, 0.25 with Classic / with FM-1, 0.23, v1 .. v14, Classic after the move over two starts, idempotence,
 the mark automatic, out of range, the older firmwares' reading modelled from their ranges); `tests/cr_backup_test.c`
-(a fresh unit FM-1; a 0.25 backup with Classic, LATCH, 60 ms, Stock restores onto FM-1 with the rest kept; a 0.26
+(a fresh unit FM-1; a 0.25 backup with Classic, LATCH, 60 ms, Stock restores onto FM-1 with the rest kept; a 0.25.1
 backup with Classic restores Classic, still Classic after a power cycle); `tools/emu/test_persist.sh`, a new section:
 a fresh unit FM-1; `keys_old_set.txt` (Classic, LOCK on, SUS + 9 latched, SAVE held), the block rewritten as 0.25
 Classic, 0.25 FM-1 and 0.23 wrote it (`tools/emu/seed_keys.py`): each powers on FM-1, current, the session applied,
@@ -5826,11 +5826,11 @@ the 9 on B3), LOCK (on LFO; its layer; the latch kept across a layout change or 
 (the FM-1 keys beside the Classic ones), "The FM-1 chord keys" (now the default, the update's move) and a compact
 "The Classic chord keys" (a table of what moves), Key Mode's notes, LATCH, the Options table (Chord Keys: FM-1 the
 default), the troubleshooting and the quick reference. docs/CHORD-LAYOUT.md's status and its Options table.
-docs/SETTINGS.md: "0.26: FM-1 the default" (the mark, why no version, why `leds`, once, downgrade, backups, LOCK, the
+docs/SETTINGS.md: "0.25.1: FM-1 the default" (the mark, why no version, why `leds`, once, downgrade, backups, LOCK, the
 SMK-37), the table's rows. README's Chords line. The site (web/site/index.html): the Playing section's intro, its
 panel picture is `img/panel-main-fm1.png` (Classic's `panel-main.png` moves to a short "The Classic chord keys"),
 the keybed figure redrawn for FM-1 (roots C4 .. G5, a SUS pill over G#3 + A#3; wide and phone), the types and roots
-text, LOCK, the secret chords, the LFO row of the button table. docs/releases/0.26.md started with the player-facing
+text, LOCK, the secret chords, the LFO row of the button table. docs/releases/0.25.1.md started with the player-facing
 note ("FM-1 is now the chord key layout: your FM-1 switches to it once when you update; Classic is in Options > Chord
 Keys"), what the switch keeps, LOCK, Classic, going back. Not released, not pushed. No device.
 
@@ -5852,3 +5852,37 @@ tools/fm1_install.py build/flash-0.25/choralroot-0.25.fwsc --unit 5BD75BE3 --yes
 version: ChoralRoot 0.25`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.25 (83 hold a sound), U033
 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0, boot stub v3 "booted the app
 after 64.0 ms; marker ok". Not pushed.
+
+## 2026-10-16 (0.25.1, the release tree)
+
+3y175. **0.25.1, the release tree: 0.25 with the FM-1 chord keys the default (the owner: "Yes: merge the FM-1 default
+and the flash record onto main and release it as v0.25.1 (stable). No SMK build needed").** A published tag is never
+moved, so the rebuild of 0.25 with 3y172's defaults gets its own number. docs/releases/0.26.md, begun with 3y173, is
+`docs/releases/0.25.1.md` for players: the summary paragraph first (the FM-1 chord keys every FM-1 plays, the switch
+once at the first start, LOCK and the latched chord kept, Classic in Options > Chord Keys, the sound 0.25's), the
+layout, the switch, LOCK, Classic, the SMK-37 (no build of 0.25.1: Chord Keys and the move are compiled out there,
+`BOARD_SMK37`, so 0.25-smk37 stays its current build), Installing, and "Going back to 0.25" (from docs/SETTINGS.md's
+section). Every "0.26" that named this change says 0.25.1 now: SETTINGS.md's "0.25.1: FM-1 the default" (and
+CHORD-LAYOUT.md's link to it, `#0251-fm-1-the-default`), 3y172 .. 3y173 above, the manual, README, CHORD-LAYOUT.md, the
+site's Playing section, `cr_settings.c` / `.h`'s comments, the tests' and the emulator's messages and the 53 scripts'
+`keys classic` comments (comments, check names and the note at the end of the emulator's `keys-record` dump line: no
+code changed); the "0.26" left in the tree are numbers (FM TONE's offsets, measured times and gains). `FELUCCA_VERSION`
+"ChoralRoot 0.25.1"; README's "New in 0.25.1"; the manual's first line. `web/releases.json`: 0.25.1 first, stable,
+sha256 ef57eaccf6e7452317a1603b8de09662a0a74b77828ecd3f20b896ffe22504d5, 1-core
+1dcac28c65d88888fc690f887971d419cd63014131476bdb73aca4f746bf0902 (610 313 B each), five bullets; 0.25's going-back note
+(the layout the settings hold, LEDs Glow, coming back moves the record again, backups). `web/releases-smk37.json`
+unchanged: 0.25-smk37 first on base 0.25, a version of the FM-1 list; the workflows' version checks (release.yml
+`^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.]+)?$`, pages.yml's tag and input checks, `tools/build.py --release`,
+releases_test) all take X.Y.Z, and the installer compares versions as strings. `./build.sh --release 0.25.1` twice, the
+first folder moved aside: the same SHA256SUMS. Size: XIP 542 828 B of 573 440 (94.7 %), RAM 80 544, POOL 308 508 of 344
+064 (the version string fits the same words: the dev build of 3y172 is the same size). **Checked**: `CR_VERSION=0.25.1
+sh tests/run_all.sh` ALL SUITES PASSED (23 suites; test_cr 1086 ok, test_persist 119; 317 golden renders, 0 changed; 0
+lint; the browser emulator built as 0.25.1, `test_web_emu.mjs` and `test_web_emu_smk.mjs` PASS); the dev build of the
+tree is the release package's bytes (ef57eacc...). `CR_PACKAGES_DIR=build/release-0.25.1 python3 tests/releases_test.py`
+releases ALL OK (both packages at their listed sha256s); with all 30 listed FM-1 packages and the 24 SMK ones, ALL OK,
+54 sha256s compared. site_test (in run_tests) site ALL OK with the 30 packages in `build/scratch/packages`
+("make_site.py --require-all builds the site for 0.25.1", "New in 0.25.1" with its bullets); `web/make_site.py
+build/choralroot.fwsc 0.25.1 build/scratch/site-full --smk-packages build/scratch/smk-packages --require-all`: the
+landing page says New in 0.25.1 and shows `img/panel-main-fm1.png`, `webapp/smk37/` offers 0.25-smk37 first, then
+0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
+orchestrator pushes main and tags v0.25.1; no SMK tag). No device.

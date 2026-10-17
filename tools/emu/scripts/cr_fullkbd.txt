@@ -4,7 +4,7 @@
 # with Key plays Notes it blocks the notes out of the scale); Single: Split Bass:
 # F3..E4 play the bass part alone, F4..G5 the chord part alone (the split at the second F, fixed); Split Oct: F3..E4
 # an octave lower. The LOCK latch made before is untouched when the mode is left.
-keys classic                  # (0.26: FM-1 is the default; this script was written for the Classic chord keys)
+keys classic                  # (0.25.1: FM-1 is the default; this script was written for the Classic chord keys)
 wait 300
 btn B3                        # LOCK on, MAJ + M7 latched: the state the mode must give back
 wait 200
