@@ -106,7 +106,7 @@ static void t_transport(void)
     ok(crm_transport(0xFA, 0, 1, 1) == 0 && crm_transport(0xFC, 1, 0, 1) == 0, "transport: a take in progress is left alone");
 }
 
-/* 0.25: MIDI Keys (crm_key; docs/CHORD-LAYOUT.md "MIDI in"): notes 53 .. 79 on the keys' channel are the keys F3 .. G5 */
+/* 0.24: MIDI Keys (crm_key; docs/CHORD-LAYOUT.md "MIDI in"): notes 53 .. 79 on the keys' channel are the keys F3 .. G5 */
 static void t_keys(void)
 {
     uint32_t ev = 0;

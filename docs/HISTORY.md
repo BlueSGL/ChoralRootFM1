@@ -5555,7 +5555,7 @@ build. The mock-ups' two timelines redrawn (Dsus at the pair, 30 ms).
 
 ## 2026-10-16 (the chord layouts built: Classic and FM-1)
 
-3y162. **Options > Chord Keys: Classic / FM-1, SUS Window, Full K Shorts, MIDI Keys (docs/CHORD-LAYOUT.md, the design of
+3y163. **Options > Chord Keys: Classic / FM-1, SUS Window, Full K Shorts, MIDI Keys (docs/CHORD-LAYOUT.md, the design of
 3y155 with every question answered; the owner: "Do this task here").** Classic is untouched in every gesture. FM-1
 (`cr_ui.c`): F#3 G#3 A#3 DIM MIN MAJ, G#3 + A#3 SUS always, F3 G3 A3 B3 the extensions, roots C4 .. G5 (`cu_root0`),
 the pick maps on D4 as before (`CU_PICK0`). The type keys are resolved into the `cr_mod_t` set Classic's keys would
@@ -5593,3 +5593,22 @@ favourites, loop slot 1). Flashed this build's package, `caffeinate -dimsu pytho
 build/choralroot.fwsc --unit 5BD75BE3 --yes` (sha256 20d0bb6a...): "done: the FM-1 runs FM-1_920", the same unit after
 the restart. After: `--info` ChoralRoot 0.24 (this tree's version string), `--sounds` all 128 slots read (83 hold a
 sound, as before), `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0. Not played yet; not pushed.
+
+3y164. **The chord layouts after playing them (2026-10-16; the owner on 3y163's build: "This works quite well, I would
+move these new options in menu right after the secret chords, not at the end. Default to 30ms window, worked fine for
+me. With lock on, the top row of shortcuts though is not always reseting when I push them, I'd like that fixed").**
+The four entries (Chord Keys, SUS Window, Full K Shorts, MIDI Keys) moved to right after Secret Chords (`O_*`,
+`O_NAME`, `O_MAX`); every Options script that counts SELECT steps past Secret Chords remapped by a simulation of the
+cursor (entries 3 .. 26 move by +3: `cr_arp_view`, `cr_chord_names(_set)`, `cr_dualcore_on` / `_opt`, `cr_key_leds`,
+`cr_key_scale`, `cr_layers`, `cr_loop_glow`, `cr_midi_in`, `cr_midi_transport`, `cr_output(_classic)`, `cr_perf_arp`,
+`cr_sixth(_set)`, `cr_touch`, `cr_usb_rate`, `gsave_save`, `persist_1core_opt`, `persist_hold_check` / `_set`,
+`reset_set`, `cr_opt_keys`, the two FM-1 scripts) and the checks' entry numbers with them; Version, Calibrate and Reset
+Settings keep 3y163's places. **The SUS Window's default is 30 ms**: `sticky` bits 3 .. 6 now (ms - 30) / 5, 0 .. 10
+(zero the default; a code above 10 reads 30), `cs.suswin` 30 before a record is read. **LOCK and the type keys**:
+reproduced in the emulator (LOCK on, MIN latched, F#3 pushed: MIN + DIM latched; SUS latched, F#3: SUS + DIM). F#3
+cannot combine while Secret Chords does not apply (Off, the default), so it opened no gesture and took the path for a
+key joining held ones, which skips LOCK's reset. A lone type key that cannot combine is now a gesture of one key,
+decided at once (`cu_tk_press` -> `cu_tk_decide`): G#3, F#3, A#3, the pair, F#3, G#3, A#3, F#3 now latch MIN, DIM,
+MAJ, SUS, DIM, MIN, MAJ, DIM, each replacing the last (`tools/emu/scripts/cr_fm1_lock.txt`, a check in test_cr), and
+F#3 again alone switches it off. G#3 and A#3 were right (they always open a gesture). The labels: the chord layouts
+ship in 0.24 (the owner: "a full v0.24 release"), so the "0.25" of 3y163's comments and docs reads 0.24.

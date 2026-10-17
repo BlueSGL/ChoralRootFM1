@@ -1,6 +1,6 @@
 # Chord Layout: Classic and FM-1 (the design)
 
-Status: **built** (HISTORY 3y162: the firmware, the emulators, the manual; [The build](#the-build-history-3y162) says where
+Status: **built** (HISTORY 3y163: the firmware, the emulators, the manual; [The build](#the-build-history-3y163) says where
 it differs from the design below). The design: every question answered by the owner on 2026-10-16 (HISTORY 3y155, with the owner's answers to its open questions
 the same day: [the second round](#the-second-round-the-owners-answers-to-the-open-questions-2026-10-16)).
 No firmware implements it yet. The pictures
@@ -106,15 +106,20 @@ One new question from answer 6, [Open questions](#open-questions) 16, answered t
 pair** (when nothing more can change the chord). With that the design was settled for the build ("Then we're good
 to build it").
 
-## The build (HISTORY 3y162)
+## The build (HISTORY 3y163)
 
 Built on 355fd58 the same day (rebased on cd8358b), in this order of the design. Where the code differs from the sections below:
 
-- **The Options' place.** The four entries sit together **after Output** (Chord Keys, SUS Window, Full K Shorts, MIDI
-  Keys), not beside Secret Chords, Split Point and MIDI Raw Chord as proposed: every entry before them keeps its place
-  (the emulator's scripts and the players' habits count SELECT steps), only Version, Calibrate and Reset Settings move
-  down by three in Classic (four in FM-1, where the SUS Window is listed). `cu_opt_vis` / `cu_opt_next` skip what is not
-  listed; the picker's dots count what is.
+- **The Options' place.** The four entries sit together **right after Secret Chords** (Chord Keys, SUS Window, Full K
+  Shorts, MIDI Keys; the owner, after playing 3y163's build where they came after Output). `cu_opt_vis` /
+  `cu_opt_next` skip what is not listed (the SUS Window in Classic, all four on the SMK-37); the picker's dots count
+  what is.
+- **The SUS Window's default is 30 ms** (the owner: "Default to 30ms window, worked fine for me"), stored as
+  (ms - 30) / 5 in `sticky` bits 3 .. 6.
+- **LOCK and a lone F#3** (3y164; the owner: "With lock on, the top row ... is not always reseting when I push them"):
+  F#3 cannot combine while Secret Chords does not apply, so it opened no gesture and was added to LOCK's latch (MIN
+  latched, F#3: MIN + DIM). A lone type key that cannot combine is now a gesture of one key, decided at once: it
+  replaces the latch as every type key does.
 - **The window's clock** is `cu_now()` when the scan takes the key, for both the type keys and the roots (a root with
   Key Touch Dynamic is taken when its velocity is known, 7 .. 15 ms after the touch: the same for every root), not the
   scan stamps `note_t0` (TIMER4 ticks).
@@ -182,7 +187,7 @@ block is on its pads, `CU_FN_KEYS` 0; the bits are kept as they are and read as 
 | Entry (the screen's name, the owner's 2nd round) | Values | Default | Place in the list | What it does |
 | --- | --- | --- | --- | --- |
 | **Chord Keys** (the Chord Layout) | Classic, FM-1 | Classic | after Secret Chords | which keys are the chord keys (above) |
-| **SUS Window** (the combine window) | 30 .. 80 ms, 5 ms a detent (11 values) | 50 ms | after Chord Keys, **listed only while Chord Keys is FM-1** (SELECT skips it in Classic; its value is kept) | [the combine window](#the-combine-window) |
+| **SUS Window** (the combine window) | 30 .. 80 ms, 5 ms a detent (11 values) | 30 ms (the owner, after playing; 50 in the design) | after Chord Keys, **listed only while Chord Keys is FM-1** (SELECT skips it in Classic; its value is kept) | [the combine window](#the-combine-window) |
 | **Full K Shorts** (Full keyboard shortcuts) | Off, On | Off | after Split Point | [F#5 and G5 on the Full keyboard](#the-full-keyboard-both-layouts) |
 | **MIDI Keys** | Off, ch 1 .. ch 16 (the channels of MIDI Perform and MIDI Bass skipped) | Off | after MIDI Raw Chord | notes 53 .. 79 on that channel press the FM-1's keys F3 .. G5 through the active layout ([MIDI in](#midi-in)) |
 

@@ -7,13 +7,13 @@ shot build/emu/test/persist_1core_splash.ppm
 wait 200
 btn GLO 80
 wait 300
-knob SELECT +25
+knob SELECT +28
 wait 300
 knob KNOB1 -1
 wait 400
 shot build/emu/test/persist_1core_opt.ppm
 dump
-knob SELECT +5                # Version (past Output and, since 0.25, Chord Keys, Full K Shorts, MIDI Keys)
+knob SELECT +2                # Version (past Output)
 wait 300
 shot build/emu/test/persist_1core_version.ppm
 dump

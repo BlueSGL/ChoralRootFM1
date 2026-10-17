@@ -48,7 +48,7 @@ from a layer: it goes with the layer (manual).
 | Velocity Curve -3 .. +3 (docs/VELOCITY.md "fm1-ctl") | Options | block `pick_roots` bits 5..7 (`CRS_VCURVE`, two's complement; 0 = 0, the default: no version) | **automatic** |
 | MIDI Perform, MIDI Bass, MIDI Raw Chord | Options | block `midi_en[3]`, `midi_ch[3]` | **automatic** |
 | Raw Chord Sound | Options | block `raw_sound` bit 0 | **automatic** |
-| MIDI Keys (0.25, docs/CHORD-LAYOUT.md) | Options | block `raw_sound` bits 1 .. 5 (`CRS_MIDI_KEYS`: 0 Off, 1 .. 16 the channel) | **automatic** |
+| MIDI Keys (0.24, docs/CHORD-LAYOUT.md) | Options | block `raw_sound` bits 1 .. 5 (`CRS_MIDI_KEYS`: 0 Off, 1 .. 16 the channel) | **automatic** |
 | MIDI Clock | Options | block `clock_mode` | **automatic** |
 | Motion | Options | block `motion` | **automatic** |
 | Chord Names (0.20) | Options | block `pick_roots` bit 3 | **automatic** |
@@ -58,7 +58,7 @@ from a layer: it goes with the layer (manual).
 | USB Rate (0.19) | Options | block `pick_roots` bit 2 | **automatic** |
 | Dual Core (On by default since 0.22; a record keeps its own; the single-core package never changes it: docs/DUALCORE.md "Two packages") | Options | block `view` bit 6 | **automatic** |
 | Output (0.19) | Options | block `pick_roots` bit 1 | **automatic** |
-| Chord Keys, Full K Shorts, SUS Window (0.25, docs/CHORD-LAYOUT.md) | Options | block `sticky` bits 1, 2 and 3 .. 6 (`CRS_LAYOUT_FM1`, `CRS_FULL_SHORT`, `CRS_SUSWIN_MS`; `CRS_STICKY_AUTO`) | **automatic** |
+| Chord Keys, Full K Shorts, SUS Window (0.24, docs/CHORD-LAYOUT.md) | Options | block `sticky` bits 1, 2 and 3 .. 6 (`CRS_LAYOUT_FM1`, `CRS_FULL_SHORT`, `CRS_SUSWIN_MS`; `CRS_STICKY_AUTO`) | **automatic** |
 | the palette (no control: MOD) | | block `palette` | automatic |
 | the panel calibration | Options > Calibrate, OCT- + OCT+ at power-on | Felucca's `panel` | **automatic** (written by the calibration itself) |
 | Bass Behaviour | Options **and** the BASS layer (SELECT, KNOB 1) | block `bass_mode` | manual |
@@ -301,13 +301,13 @@ The block has its own header:
 | bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range; Solfège is `scale`'s bit 7, not this byte's) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
 | perform_on, perform_mode, perf_sel | 0/1, Strum..Harp, the PERF layer's entry 0..6 | off, Strum, 0 |
-| sticky | bit 0: LATCH (manual). **0.25, docs/CHORD-LAYOUT.md** (automatic, `CRS_STICKY_AUTO` 0x7E): bit 1 Options > Chord Keys FM-1 (`CRS_LAYOUT_FM1`), bit 2 Full K Shorts On (`CRS_FULL_SHORT`), bits 3 .. 6 the SUS Window as (ms - 50) / 5, four bits' two's complement, -4 .. +6 = 30 .. 80 ms (`CRS_SUSWIN_MS`); a code outside: 50 ms, the other bits kept; bit 7 unknown: the byte's default. No version: 0 is every default. Every older firmware checks the byte with CRS_FIX(sticky, 0, 1): a byte with a new bit set reads as its default there (LATCH off), nothing else touched, so it starts in Classic. The engine takes bit 0 alone (`cr_settings_apply` / `cr_settings_capture` merge it) | off; Classic, Off, 50 ms |
+| sticky | bit 0: LATCH (manual). **0.24, docs/CHORD-LAYOUT.md** (automatic, `CRS_STICKY_AUTO` 0x7E): bit 1 Options > Chord Keys FM-1 (`CRS_LAYOUT_FM1`), bit 2 Full K Shorts On (`CRS_FULL_SHORT`), bits 3 .. 6 the SUS Window as (ms - 30) / 5, 0 .. 10 = 30 .. 80 ms (`CRS_SUSWIN_MS`; 30 the owner's default); a code above 10: 30 ms, the other bits kept; bit 7 unknown: the byte's default. No version: 0 is every default. Every older firmware checks the byte with CRS_FIX(sticky, 0, 1): a byte with a new bit set reads as its default there (LATCH off), nothing else touched, so it starts in Classic. The engine takes bit 0 alone (`cr_settings_apply` / `cr_settings_capture` merge it) | off; Classic, Off, 30 ms |
 | bpm | 20..300 | 120 |
 | par[5][11] | per mode, the engine's `CR_PAR_MIN`..`MAX` | design.md §21 (= `cr_init`) |
 | loop_sync, loop_quant, loop_count_in, loop_level | 0..5, 0..5, 0/1, 0..100 | Free, none, **on** (the count-in), 100 (the looper: docs/LOOPER.md) |
 | midi_en[3], midi_ch[3] | per stream MAIN BASS RAW | on, on, **RAW off**; channels 1 / 2 / 3 |
 | clock_mode | Off / **Out** / In | **Out** (Orchid sends clock) |
-| raw_sound | bit 0: RAW also plays part 0. **0.25**: bits 1 .. 5 Options > MIDI Keys, 0 Off, 1 .. 16 the channel (`CRS_MIDI_KEYS`; above 16: Off, bit 0 kept). An older firmware's CRS_FIX(raw_sound, 0, 1) reads a byte with a channel as Raw Chord Sound Off. The engine takes bit 0 alone | off; MIDI Keys Off |
+| raw_sound | bit 0: RAW also plays part 0. **0.24**: bits 1 .. 5 Options > MIDI Keys, 0 Off, 1 .. 16 the channel (`CRS_MIDI_KEYS`; above 16: Off, bit 0 kept). An older firmware's CRS_FIX(raw_sound, 0, 1) reads a byte with a channel as Raw Chord Sound Off. The engine takes bit 0 alone | off; MIDI Keys Off |
 | view, motion, leds | view bits 0..2: Chord / Keyboard / Notes / Geek Out / Scope / **Geek Out 2 (5; 0.22**: four meters, docs/DUALCORE.md "Geek Out 2"; a firmware up to 0.21 finds 5 out of range and reads Chord) (Options > View, HOME held's menu); **v9: bit 7 the view lock** (`CRS_VIEW` / `CRS_VIEW_LOCK` / `CRS_VIEW_BYTE`; locked: HOME tap never cycles the view); **v12: bit 6 Options > Dual Core On** (`CRS_DC_ON`, `CRS_DUALCORE`; set = On: core 1 started at power-on, docs/DUALCORE.md; v11, 0.15, had the bit the other way round: set = Off, On the default), another bit or view: the default; Full/Calm/Off, Glow/Stock | Chord, unlocked, Dual Core **On** (0.22, a unit with no record and Reset Settings; Off 0.16 .. 0.21; a view byte out of range keeps the record's Dual Core), Full, Glow; a v1..v8 record: its view, unlocked; a v1..v11 record: Dual Core Off, whatever its bit 6 |
 | palette | gfx.c index, 0xFF = MOD | **MOD** |
 | fx_on | 0/1 | on |

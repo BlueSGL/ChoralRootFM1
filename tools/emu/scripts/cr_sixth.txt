@@ -21,7 +21,7 @@ dump                          # 1
 shot build/emu/test/cr_sixth_off.ppm
 btn GLO 80                    # Options > 6th with 7th, the chord still held
 wait 300
-knob SELECT +3
+knob SELECT +6
 wait 300
 dump                          # 2
 shot build/emu/test/cr_sixth_opt_off.ppm

@@ -13,7 +13,7 @@ btn D4 up
 wait 300
 btn GLO 80                    # Options
 wait 300
-knob SELECT +5                # Key Touch
+knob SELECT +8                # Key Touch
 wait 200
 knob KNOB1 +2                 # Velocity + Aftertouch
 wait 200

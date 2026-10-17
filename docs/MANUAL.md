@@ -174,7 +174,7 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | SELECT | the tempo, 20 to 300 BPM; in a layer or a menu: moves the picker (the KEY layer: turns its page) | the metronome's level |
 | PRESETS | the chord sound: the next or previous one of its engine | the chord sound's engine |
 | ALGORITHM | the bass sound: off, then the bass engine's sounds | the bass sound's engine (with BASS held instead: the bass level) |
-| KNOB 1 | the chord's voicing (on the Full keyboard too, since 0.25) | the Single Notes split point |
+| KNOB 1 | the chord's voicing (on the Full keyboard too, since 0.24) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
 | KNOB 4 | the chord part's send into the selected effect, in per cent | |
@@ -365,7 +365,7 @@ same type pressed again (off, above) and a type pressed when none is latched lea
 
 - **KNOB 1** revoices the chord: one click up moves the lowest note up an octave, one click down moves the highest
   note down, from -12 to +12. The screen adds `voicing +2` under the notes. The voicing applies to every chord that
-  follows, and to a playing loop. On the Full keyboard too (since 0.25: chords play there, Key plays Chords and
+  follows, and to a playing loop. On the Full keyboard too (since 0.24: chords play there, Key plays Chords and
   G5's chords); its octave is OCT- / OCT+'s.
 - **OCT-** and **OCT+** shift the root keys by octaves, from -2 to +2 (`Oct +1` at the top right). A low voicing can
   put chord notes below D4, where no key can light for them; the notes line on the screen always has them.
@@ -406,7 +406,7 @@ The small `5` and `add4` are red. Extensions stack on top as usual.
 
 ### The FM-1 chord keys
 
-**Options > Chord Keys: FM-1** (new in 0.25; Classic, the Orchid's layout above, is the default and is unchanged):
+**Options > Chord Keys: FM-1** (new in 0.24; Classic, the Orchid's layout above, is the default and is unchanged):
 
 ```
 black      DIM   MIN   MAJ         C#4   D#4         F#4   G#4   A#4         C#5   D#5         F#5
@@ -419,7 +419,7 @@ white    6     m7    M7    9     C4    D4    E4    F4    G4    A4    B4    C5   
 - **SUS is G#3 + A#3 held together**, always (press both small black keys with one finger). The other keys keep
   their jobs: F#3 DIM, G#3 MIN, A#3 MAJ, the extensions 6 m7 M7 on F3 G3 A3, and B3 is the **9**. C4 and C#4 are
   roots, so there are 20 of them.
-- **The SUS Window** (Options > SUS Window, 30 to 80 ms, 50 by default). One finger never lands on both keys at
+- **The SUS Window** (Options > SUS Window, 30 to 80 ms, 30 by default). One finger never lands on both keys at
   once. A root pressed while the first of the pair is down and its window still open waits, and plays when the
   chord is decided: at once when the pair is complete, or when the window closes (then G#3 alone is MIN, A#3 alone
   MAJ). So you never hear a minor chord turn into a sus chord. A root with no type key down, or with type keys held
@@ -1627,6 +1627,10 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Play Style** | Simple, Advanced, Free | Simple | what chord keys do while a root is held ([Play styles](#play-styles)) |
 | **Extension Addition** | Add Note, Play Chord | Add Note | in Advanced and Free: an extension adds its note, or replays the chord |
 | **Secret Chords** | Off, Simple, All | Off | two chord types together make a third chord ([Secret chords](#secret-chords)) |
+| **Chord Keys** | Classic, FM-1 | Classic | which keys are the chord keys: Classic, the Orchid's (DIM MIN MAJ SUS on F#3 G#3 A#3 C#4, LOCK on B3), or FM-1 (SUS = G#3 + A#3, the 9 on B3, C4 and C#4 roots, LOCK on LFO) ([The FM-1 chord keys](#the-fm-1-chord-keys)). Not on the SMK-37 |
+| **SUS Window** | 30 to 80 ms, 5 ms a step | 30 ms | listed with the FM-1 chord keys only: how long a root waits for the second key of G#3 + A#3 ([The FM-1 chord keys](#the-fm-1-chord-keys)) |
+| **Full K Shorts** | Off, On | Off | on the Full keyboard, F#5 brings the chord keys back and G5 plays a chord on every key ([Key Mode](#key-mode)) |
+| **MIDI Keys** | Off, ch 1 to ch 16 | Off | the channel whose notes 53 to 79 press the FM-1's keys F3 to G5 ([MIDI in](#midi-in-usb-and-the-trs-jack)); the MIDI Perform and MIDI Bass channels are skipped |
 | **6th with 7th** | In place, Octave up | In place | where the 6th sounds in a chord that also has a seventh (7 or M7). In place: 9 semitones above the root, under the seventh, as the Orchid plays it. Octave up: an octave higher, on top, which makes it a 13th chord (D + 7 + 6: D F# A C B). Chords without a seventh never change; the name does not change ([Types and extensions](#types-and-extensions)) |
 | **Velocity** | 1 to 127 | 100 | the velocity of every key, for the sound and for MIDI out |
 | **Bass Behaviour** | Chords Only, Unison Bass, Bass Single Notes, Solo | Chords Only | what the bass plays ([Bass](#6-bass)) |
@@ -1647,10 +1651,6 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **USB Rate** | 44.1 kHz, 44.1 + 48 kHz | 44.1 kHz | 44.1 kHz: the computer records at the FM-1's own rate, as in 0.18. 44.1 + 48 kHz: the computer may also choose 48 kHz, which the FM-1 converts for it; that takes some of its processor time while a recording runs ([USB audio recording](#usb-audio-recording)). The FM-1 leaves USB for a second when you change it |
 | **Dual Core** | Off, On | On (a new unit; an updated unit keeps what it had) | On: the chip's second core shares the work, so more voices sound (below). Takes effect after a restart |
 | **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder, and everything sounds 0.7 ms later (its limiter looks ahead). You can switch while you play to compare |
-| **Chord Keys** | Classic, FM-1 | Classic | which keys are the chord keys: Classic, the Orchid's (DIM MIN MAJ SUS on F#3 G#3 A#3 C#4, LOCK on B3), or FM-1 (SUS = G#3 + A#3, the 9 on B3, C4 and C#4 roots, LOCK on LFO) ([The FM-1 chord keys](#the-fm-1-chord-keys)). Not on the SMK-37 |
-| **SUS Window** | 30 to 80 ms, 5 ms a step | 50 ms | listed with the FM-1 chord keys only: how long a root waits for the second key of G#3 + A#3 ([The FM-1 chord keys](#the-fm-1-chord-keys)) |
-| **Full K Shorts** | Off, On | Off | on the Full keyboard, F#5 brings the chord keys back and G5 plays a chord on every key ([Key Mode](#key-mode)) |
-| **MIDI Keys** | Off, ch 1 to ch 16 | Off | the channel whose notes 53 to 79 press the FM-1's keys F3 to G5 ([MIDI in](#midi-in-usb-and-the-trs-jack)); the MIDI Perform and MIDI Bass channels are skipped |
 | **Version** | | | the firmware's version; the line under it is this FM-1's unit ID (`unit ID A1B2C3D4`, its flash chip's: the same after any install), which tells several FM-1s on one computer apart (`fm1_install.py --unit`, the device manager) |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
 | **Reset Settings** | | | OCT+ twice puts every setting back to its default (below) |
@@ -1798,7 +1798,7 @@ playing and a stop when it stops. PANIC sends all notes off (CC 123).
 
 A part whose channel is Off ignores MIDI in.
 
-**MIDI Keys** (Options > MIDI Keys, Off by default; new in 0.25): on that channel the notes 53 to 79 press the FM-1's
+**MIDI Keys** (Options > MIDI Keys, Off by default; new in 0.24): on that channel the notes 53 to 79 press the FM-1's
 own keys F3 to G5, exactly as the keybed does: the chord keys of the layout you chose, the roots, LOCK, the SUS
 Window, the Full keyboard and its shortcuts. The note's velocity plays the key; CC 120 and CC 123 let every key go;
 other notes and messages on that channel do nothing. It cannot be the MIDI Perform or MIDI Bass channel (those are

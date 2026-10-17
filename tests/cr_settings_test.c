@@ -1357,9 +1357,9 @@ static void t_auto(void)
         else if (((const uint8_t *)&z)[i] == 0x00) nman++;
         else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 4, Output, USB Rate, Chord Names, 6th with 7th; bass_on's: bits 2 .. 7, Key Touch and the two Sens) */
     }
-    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3, 6th with 7th in bit 4; bass_on's: Key Touch and the Sens in bits 2 .. 7; sticky's: the chord layouts' Options in bits 1 .. 6, 0.25)\n", (unsigned)nauto,
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3, 6th with 7th in bit 4; bass_on's: Key Touch and the Sens in bits 2 .. 7; sticky's: the chord layouts' Options in bits 1 .. 6, 0.24)\n", (unsigned)nauto,
            (unsigned)nman, (unsigned)both);
-    ok(nauto == 17u && both == 4u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and four bytes' bits of the block's 180 are automatic (0.25: sticky's bits 1 .. 6)");
+    ok(nauto == 17u && both == 4u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and four bytes' bits of the block's 180 are automatic (0.24: sticky's bits 1 .. 6)");
     m = b;
     cr_settings_auto(&m, &b);
     ok(!memcmp(&m, &b, sizeof b), "auto: copying a record's own Options into it changes nothing");
@@ -1567,7 +1567,7 @@ static void t_snap(void)
     ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.key_on == 5u && CRS_SNAP(&r) == 0u, "a v14 record: Key Mode on, the Full keyboard, Snap Off");
 }
 
-/* 0.25 (docs/CHORD-LAYOUT.md): Options > Chord Keys, Full K Shorts and the SUS Window in the spare bits 1 .. 6 of
+/* 0.24 (docs/CHORD-LAYOUT.md): Options > Chord Keys, Full K Shorts and the SUS Window in the spare bits 1 .. 6 of
  * `sticky` (bit 0 stays LATCH), MIDI Keys in bits 1 .. 5 of `raw_sound` (bit 0 stays Raw Chord Sound): zero the
  * defaults (no version), the ranges, the automatic bits, the engine's bit 0 alone (apply / capture), and the rule of
  * every older firmware (CRS_FIX(sticky, 0, 1), CRS_FIX(raw_sound, 0, 1): modelled, the old binaries were not run) */
@@ -1576,8 +1576,8 @@ static void t_layout(void)
     cr_settings_t d, s, r, m2, o2;
     cr_settings_out_t o;
     cr_settings_defaults(&d);
-    ok(d.sticky == 0 && CRS_LAYOUT(&d) == 0u && CRS_FULLSHORT(&d) == 0u && CRS_SUSWIN_MS(&d) == 50u && !CRS_LATCH(&d),
-       "defaults: Classic, Full K Shorts Off, the SUS Window 50 ms, LATCH off (the byte 0)");
+    ok(d.sticky == 0 && CRS_LAYOUT(&d) == 0u && CRS_FULLSHORT(&d) == 0u && CRS_SUSWIN_MS(&d) == 30u && !CRS_LATCH(&d),
+       "defaults: Classic, Full K Shorts Off, the SUS Window 30 ms, LATCH off (the byte 0)");
     ok(d.raw_sound == 0 && CRS_MIDI_KEYS(&d) == 0u, "defaults: MIDI Keys Off (the byte 0)");
     s = d;
     s.sticky = CRS_STICKY_BYTE(1, 1, 1, 30);
@@ -1587,12 +1587,12 @@ static void t_layout(void)
     s.sticky = CRS_STICKY_BYTE(0, 1, 0, 80);
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SUSWIN_MS(&r) == 80u && CRS_LAYOUT(&r) == 1u && !CRS_LATCH(&r), "80 ms, FM-1");
-    s.sticky = (uint8_t)(CRS_LAYOUT_FM1 | (7u << 3));
-    cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SUSWIN_MS(&r) == 50u && CRS_LAYOUT(&r) == 1u, "a window code out of range (85 ms): 50, FM-1 kept");
     s.sticky = (uint8_t)(CRS_LAYOUT_FM1 | (11u << 3));
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SUSWIN_MS(&r) == 50u && CRS_LAYOUT(&r) == 1u, ".. and below (25 ms): 50");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SUSWIN_MS(&r) == 30u && CRS_LAYOUT(&r) == 1u, "a window code out of range (85 ms): 30, FM-1 kept");
+    s.sticky = (uint8_t)(CRS_LAYOUT_FM1 | (15u << 3));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SUSWIN_MS(&r) == 30u && CRS_LAYOUT(&r) == 1u, ".. and the largest code (105 ms): 30");
     s.sticky = 0x81u;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.sticky == d.sticky, "bit 7 (unknown): the byte's default");
@@ -1623,9 +1623,9 @@ static void t_layout(void)
     ok(CRS_LATCH(&s) == 1u && CRS_LAYOUT(&s) == 1u && CRS_FULLSHORT(&s) == 1u && CRS_SUSWIN_MS(&s) == 40u && CRS_MIDI_KEYS(&s) == 9u,
        "the engine's capture writes bit 0 and keeps the UI's bits");
     cr_set_sticky(&C, 0);
-    s.sticky = CRS_STICKY_BYTE(1, 1, 0, 50);   /* an older firmware's CRS_FIX(sticky, 0, 1), CRS_FIX(raw_sound, 0, 1) */
+    s.sticky = CRS_STICKY_BYTE(1, 1, 0, 30);   /* an older firmware's CRS_FIX(sticky, 0, 1), CRS_FIX(raw_sound, 0, 1) */
     s.raw_sound = CRS_RAW_BYTE(1, 3);
-    ok(s.sticky > 1u && s.raw_sound > 1u && CRS_STICKY_BYTE(1, 0, 0, 50) == 1u && CRS_RAW_BYTE(1, 0) == 1u,
+    ok(s.sticky > 1u && s.raw_sound > 1u && CRS_STICKY_BYTE(1, 0, 0, 30) == 1u && CRS_RAW_BYTE(1, 0) == 1u,
        "an older firmware: a byte with a new bit is out of its range (LATCH off, Raw Chord Sound off there); with the defaults it is one it knows");
 }
 

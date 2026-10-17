@@ -151,7 +151,7 @@ shot build/emu/test/cr_fullkbd_two.ppm
 btn A3 up
 btn F3 up
 wait 300
-knob KNOB1 +1                 # KNOB 1: the voicing since 0.25 (docs/CHORD-LAYOUT.md); the octave stays 0
+knob KNOB1 +1                 # KNOB 1: the voicing since 0.24 (docs/CHORD-LAYOUT.md); the octave stays 0
 wait 200
 shot build/emu/test/cr_fullkbd_octave.ppm
 btn F3 down

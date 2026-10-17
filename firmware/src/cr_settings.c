@@ -207,9 +207,9 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(perform_on, 0, 1);
     CRS_FIX(perform_mode, 0, CRS_NPM - 1);
     CRS_FIX(perf_sel, 0, 6);
-    CRS_FIX(sticky, 0, 0x7F);                      /* (0.25: bit 1 Chord Keys, bit 2 Full K Shorts, bits 3 .. 6 the SUS
+    CRS_FIX(sticky, 0, 0x7F);                      /* (0.24: bit 1 Chord Keys, bit 2 Full K Shorts, bits 3 .. 6 the SUS
                                                     * Window; bit 7 unknown: the default byte) */
-    if (CRS_SUSWIN_CODE(s) < -4 || CRS_SUSWIN_CODE(s) > 6)   /* (outside 30 .. 80 ms: 50, the other bits kept) */
+    if (CRS_SUSWIN_CODE(s) > 10)                   /* (above 80 ms: 30, the default, the other bits kept) */
         s->sticky = (uint8_t)(s->sticky & 0x07u);
     CRS_FIX(bpm, 20, 300);
     for (m = 0; m < CRS_NPM; m++)
@@ -225,7 +225,7 @@ static void crs_sanitize(cr_settings_t *s)
         if (s->midi_ch[i] > 15u) s->midi_ch[i] = d.midi_ch[i];
     }
     CRS_FIX(clock_mode, 0, CRS_CLOCK_IN);
-    CRS_FIX(raw_sound, 0, 0x3F);                   /* (0.25: bits 1 .. 5 MIDI Keys' channel) */
+    CRS_FIX(raw_sound, 0, 0x3F);                   /* (0.24: bits 1 .. 5 MIDI Keys' channel) */
     if (CRS_MIDI_KEYS(s) > 16u)                    /* (no such channel: Off, Raw Chord Sound kept) */
         s->raw_sound = (uint8_t)(s->raw_sound & 1u);
     if ((s->view & 0x38u) || CRS_VIEW(s) > 5u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; 5 Geek Out 2

@@ -176,7 +176,7 @@ typedef struct {
     uint8_t snapn_n;                 /* .. how many */
     uint8_t mods_down, qstack[CR_NMOD], qn;
     uint8_t lock, mods_touch;                      /* LOCK (cr_mod_lock): the chord keys physically held (cr_mod_touch) */
-    uint8_t full_chords;                           /* cr_set_full_chords 0 / 1 / 2 (0.25; in the padding before v[]) */
+    uint8_t full_chords;                           /* cr_set_full_chords 0 / 1 / 2 (0.24; in the padding before v[]) */
     cr_voice_t v[CR_NVOICE];         /* [0, CR_MAX_VOICES): keyed voices; then one per pad */
     cr_ev_t ev[CR_MAX_EV];
     uint16_t nev;

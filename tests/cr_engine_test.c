@@ -1771,7 +1771,7 @@ static void s_torture(void)
 }
 
 /* -------------------------------------------- tick-independent checks --- */
-/* 0.25, the FM-1 chord keys (docs/CHORD-LAYOUT.md): the UI posts a set of types as HELD downs, ups, then one PRESS;
+/* 0.24, the FM-1 chord keys (docs/CHORD-LAYOUT.md): the UI posts a set of types as HELD downs, ups, then one PRESS;
  * a HELD down re-types nothing (a key of the pair let go leaves the other's type for the next root, what sounds stays),
  * a PRESS does what a down does; and G5's chords on the Full keyboard (cr_set_full_chords: 1 the chord keys down / Key
  * Mode's chord on every key, 2 single notes only) */
@@ -1839,7 +1839,7 @@ static void s_fm1(void)
     cr_set_full_chords(&C, 0);
     K(62, 1); step(50);
     on_notes_sorted(n, 0);
-    ok(!strcmp(n, "62 65 69"), "full, no shortcuts (0): Key Mode's chord as before 0.25");
+    ok(!strcmp(n, "62 65 69"), "full, no shortcuts (0): Key Mode's chord as before 0.24");
     R(62, 1); step(400); clear();
     cr_set_key(&C, 0, 0, CR_SCALE_MAJOR);
     cr_set_keyboard(&C, 0, 65);

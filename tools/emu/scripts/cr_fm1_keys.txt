@@ -1,4 +1,4 @@
-# ChoralRoot 0.25: Options > Chord Keys FM-1 (docs/CHORD-LAYOUT.md). The FM-1 layout's keys, the SUS Window, LOCK on
+# ChoralRoot 0.24: Options > Chord Keys FM-1 (docs/CHORD-LAYOUT.md). The FM-1 layout's keys, the SUS Window, LOCK on
 # LFO, LATCH on GLO held + LFO, the KEY layer's pick, a layout change. tools/emu/test_cr.sh reads the dumps by number:
 #   1 Chord Keys FM-1 (the Options)     2 SUS Window 80 ms
 #   3 G#3 A#3 then D4: Dsus             4 G#3, D4 25 ms later: nothing yet (D4 waits)   5 A#3 at 50 ms: Dsus, once
@@ -13,9 +13,9 @@
 #   26 KEY layer (pick): G#3 then A#3 25 ms later: minor, the second key ignored   27 A#3 alone later: major
 #   28 back to Classic: C#4 is SUS again (C#4 + D4: Dsus)
 wait 500
-btn GLO 80                    # Options: Chord Keys is the 28th entry listed (after Output)
+btn GLO 80                    # Options: Chord Keys is the 4th entry listed (after Secret Chords)
 wait 300
-knob SELECT +27
+knob SELECT +3
 wait 200
 knob KNOB1 +1
 wait 300
@@ -23,7 +23,7 @@ dump                          # 1
 shot build/emu/test/cr_fm1_opt_layout.ppm
 knob SELECT +1                # SUS Window (listed in FM-1 only)
 wait 200
-knob KNOB1 +6                 # 50 -> 80 ms (a wide window: the emulator's frames are coarse)
+knob KNOB1 +10                # 30 (the default) -> 80 ms (a wide window: the emulator's frames are coarse)
 wait 300
 dump                          # 2
 shot build/emu/test/cr_fm1_opt_suswin.ppm
@@ -193,7 +193,7 @@ btn GLO 80                    # back to Classic: the latch kept, C#4 is SUS agai
 wait 300
 knob SELECT -40
 wait 200
-knob SELECT +27
+knob SELECT +3
 wait 200
 knob KNOB1 -1
 wait 200

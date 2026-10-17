@@ -599,8 +599,8 @@ static struct {
     int8_t vel_curve;                     /* Options > Velocity Curve -3 .. +3 (0: Velo's 0.7; the map's exponent x 2^(0.2 k)) */
     uint8_t sixth_up;                     /* Options > 6th with 7th (0.20): 1 Octave up, 0 In place, the default
                                            * (cr_engine.c cr_set_sixth_up; docs/CHORD-NAMES.md) */
-    uint8_t layout;                       /* Options > Chord Keys (0.25, docs/CHORD-LAYOUT.md): 0 Classic, 1 FM-1 */
-    uint8_t suswin;                       /* .. SUS Window, ms (30 .. 80, 5 a step; 50 the default): FM-1's type keys */
+    uint8_t layout;                       /* Options > Chord Keys (0.24, docs/CHORD-LAYOUT.md): 0 Classic, 1 FM-1 */
+    uint8_t suswin;                       /* .. SUS Window, ms (30 .. 80, 5 a step; 30 the default): FM-1's type keys */
     uint8_t full_short;                   /* .. Full K Shorts: F#5 / G5 are the Full keyboard's shortcut keys */
     uint8_t midi_keys;                    /* .. MIDI Keys: the channel (1 .. 16) whose notes 53 .. 79 press the keys F3 ..
                                            * G5; 0 Off */
@@ -1064,25 +1064,26 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 }
 
 /* ------------------------------------------------------------- Options --- */
-enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_VCURVE, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
+enum { O_STYLE, O_EXTADD, O_SECRET,
+       O_LAYOUT, O_SUSWIN, O_FULLSHORT, O_MIDI_KEYS,   /* the chord layouts (0.24, docs/CHORD-LAYOUT.md): together, after
+                                          * Secret Chords (the owner, 2026-10-16) */
+       O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_VCURVE, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT,
-       O_LAYOUT, O_SUSWIN, O_FULLSHORT, O_MIDI_KEYS,   /* the chord layouts (0.25, docs/CHORD-LAYOUT.md): together,
-                                          * after Output, so every entry before keeps its place */
        O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
        O_SAFE, O_ERASE,
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
-static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th",
+static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords",
+    "Chord Keys", "SUS Window", "Full K Shorts", "MIDI Keys", "6th with 7th",
     "Velocity", "Key Touch", "Velocity Sens", "Velocity Curve", "Aftertouch Sens",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
-    "Chord Keys", "SUS Window", "Full K Shorts", "MIDI Keys",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, CU_TOUCH_MAX, 2, CU_VCURVE_MAX, CU_ATSENS_MAX, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
-                                   1, 1, 1, 10, 1, 16, 0, 0, 0, 0, 0};
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 10, 1, 16, 1, 127, CU_TOUCH_MAX, 2, CU_VCURVE_MAX, CU_ATSENS_MAX, 3, 2, 11, 16, 16,
+                                   16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 /* an entry listed (docs/CHORD-LAYOUT.md): the chord layouts' four not on the SMK-37 (its chord keys are pads), the
  * SUS Window only while Chord Keys is FM-1. SELECT skips the others (cu_opt_next); their values are kept */
@@ -4489,6 +4490,13 @@ static void cu_tk_press(uint32_t k)                /* an FM-1 type key down (as 
         cu_trace("chord keys: gesture opens (key %u)\n", (unsigned)k);
         return;
     }
+    if (cu.tk_held == bit) {                       /* alone, and it cannot combine (F# with Secret Chords not applying):
+                                                    * a gesture of one key, decided at once (LOCK: it replaces the latch
+                                                    * as any type key; until 3y164 it was added to it) */
+        cu.g_keys = (uint8_t)bit;
+        cu_tk_decide();
+        return;
+    }
     cu.tpend = 0;                                  /* (joins keys held from a decided gesture: at once) */
     n = cu_tk_resolve(cu.tk_held, w);
     cu_tk_post(w, n, 1, 0);
@@ -5278,7 +5286,7 @@ static void cu_knob(uint32_t role, int32_t s)
         return;
     }
     switch (role) {
-    case EN_K1:                                    /* the voicing, on the Full keyboard too since 0.25 (chords play
+    case EN_K1:                                    /* the voicing, on the Full keyboard too since 0.24 (chords play
                                                     * there: Key plays Chords, G5; docs/CHORD-LAYOUT.md); the octave is
                                                     * OCT- / OCT+'s */
         cr_post(CRE_VOICING, 0, 0, s);
@@ -8329,6 +8337,7 @@ static void cr_ui_init(void)
     cs.perform_on = cr.perform_on;
     cs.sticky = cr.sticky;
     cs.vel = 100;
+    cs.suswin = 30;                               /* (the settings' default, before a record is read) */
     for (m = 0; m < CR_PM_COUNT; m++)
         for (p = 0; p < CR_P_COUNT; p++)
             cs.par[m][p] = (int16_t)cr_get_param(&cr, (cr_pmode_t)m, (cr_eparam_t)p);

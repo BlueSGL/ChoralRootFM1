@@ -172,7 +172,7 @@ grep -aq '^save: part 0 slot U001 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "s
     ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core Off stored and back after a relaunch" \
     || bad "reset: the changed settings: $(sf "$R1" 1) / $changed / $(sn "$R2" 1)"
 [ "$(ov "$R2" 2)" = "1 32 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 32 of 33 " "$R2" &&
-    ok "Reset Settings is the last Options entry (32 of 32 since 0.25's three): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
+    ok "Reset Settings is the last Options entry (32 of 32 since 0.24's three): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
 [ "$(ov "$R2" 3)" = "1 32 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 32 Reset Settings: all options to default" ] &&
     [ "$(ov "$R2" 5)" = "0 32 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 32 Reset Settings: all options to default" ] &&
     [ "$(sn "$R2" 3)" = "$changed" ] && [ "$(sn "$R2" 4)" = "$changed" ] && [ "$(sn "$R2" 5)" = "$changed" ] && [ "$(sn "$R2" 6)" = "$changed" ] &&
@@ -758,7 +758,7 @@ ffl "$X4" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read), f
 # the single-core package: Options, the version, one core on a flash whose record says Dual Core On
 EMU_UI_LOG=1 "$E1" --headless --flash "$XF" --script "$S/persist_1core_opt.txt" >"$X5" 2>&1 || bad "two packages, Options: exit status"
 want1="$(grep -a -m1 '^  version:' "$X5" | sed -n "s/.* build '\(.*\)'$/\1/p") 1-core"
-grep -aq "^  options: open 1 entry 25 of 3[0-9] 'Dual Core' value '1 core build'" "$X5" &&
+grep -aq "^  options: open 1 entry 28 of 3[0-9] 'Dual Core' value '1 core build'" "$X5" &&
     grep -aq "^  options: open 1 entry 30 of 3[0-9] 'Version' value '$want1'" "$X5" &&
     grep -a -m1 '^  version:' "$X5" | grep -q "options '$want1' identity '$want1' " &&
     ok "the single-core package: Options > Dual Core '1 core build' (KNOB 1 changes nothing), Version and the SysEx identity '$want1': $OUT/persist_1core_opt.ppm, persist_1core_version.ppm" ||
