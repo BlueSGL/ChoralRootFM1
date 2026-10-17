@@ -5939,3 +5939,39 @@ to the release. Expected (estimates, from the before: 2397 / 8 = 300 us a voice)
 1650 (the bass and four voices: core 1 the longer side), the block about 2450 .. 2650 instead of 3256 (84 .. 91 %), no
 shed dry; fm6 unchanged (the control: FM6 is not split yet, and its dry shed is the next step's case). Next: FM6's chord (a third
 `fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.
+
+## 2026-10-17 (MOD's background black)
+
+3y185. **MOD's background is black (the owner: "ChoralRoot's background is either a dark grey or the backlight is making
+it look so, it would look nicer if the background was a full black").** `tools/gen_ui_palettes.py`: MOD's BG (10, 10,
+12), RGB565 0x0841 (8, 8, 8 on the panel), is (0, 0, 0); SURF, TEXT, THEME and ACCENT as they were. The derived colours
+follow (src/gfx.c's mixes from BG): MID 0xad75 -> 0xad54, DIM 0x6b4d -> 0x6b2c, LINE 0x3186 -> 0x2965, SEL 0xca85 ->
+0xca65, TINT 0x28a2 -> 0x2061, KEY 0xc5f7 -> 0xbdf7, INK = BG; RAISE (from SURF) and REC unchanged. Every check of
+CHECKS still passes, nothing adjusted: the closest are ink/sel 4.66 (4.5), line/bg 1.49 (1.25), theme/surf 5.72 (4.5);
+against BG every pairing gains or stays (text/bg 18.0 -> 18.9, theme/bg 6.7 -> 7.0), mid/surf 7.7 -> 7.4 and key/surf
+9.4 -> 9.2 (MID and KEY a little darker). ChoralRoot's named black (`cr_draw.c` CR_NAMED[CR_COL_BLACK], the LED windows
+of the panel caps and P5's cells) is (0, 0, 0) with it; CR_SCREENS.md and EDITOR.md say so. Unchanged: the crash screen
+(its fixed red), the boot fill (already 0), every other fill (T_BG), the browser emulator's and the layout tool's LCD
+frames (#000 already), the editor (no screen colours), `web/fm1layout.js` (tokens only), the site's `--ground` #080808
+(the web pages, not the screen), `design/chord-layout-mockups.html`'s PAL and the design sheets (`design/*.png`: dated
+records), and the designer (`../ChoralRootFM1Designer/index.html`'s MOD, bg [10,10,12]: another repository). The other
+dark palettes keep their near-black backgrounds (MONO (14, 14, 14) = 0x0841 too, GREEN (6, 18, 10) 0x0081, AMBER (18,
+14, 8) 0x1061, ICE (8, 16, 24) 0x0883, VIOLET (16, 12, 28) 0x1063, ROSE (24, 10, 18) 0x1842): for the owner to decide.
+
+Two tests and one emulator check took black as "not drawn", which a black background now is: `tests/cr_draw_test.c` (the
+wake after `cr_draw_black`) and `tests/cr_backup_test.c` (SCREEN 0, then a knob) fill the host panel with a word no view
+holds before the wake's draw and count the pixels that keep it; `tools/emu/test_cr.sh`'s `blk` counts magenta, painted
+by a new script command `lcdfill` (tools/emu/emu.c, README) before each of `cr_screen_off.txt`'s five wakes (a run with
+`lcdfill` and nothing to redraw: all 57 600 pixels magenta), and cr_map_filt's unmarked cell is 0 0 0. Goldens rewritten
+with the suites' flags (`CR_FREE_GOLDEN=1 CR_P5CELL_GOLDEN=1 CR_P5ROWS_GOLDEN=1 sh tests/run_cr_draw.sh`: 22 + 8 + 18
+pictures); the manual's 12 screenshots again from `docs/manual/shots.txt` (five of them, layer-fx, layer-fx-sends,
+layer-fx-delay, editor-filter and options, already differed from the committed ones in a few hundred pixels of text
+before this change: the tree's renders, not this change). **How the diff was checked**: every pixel of the 335 cr_draw
+renders and the 12 manual shots, before against after (the same tree with the old palette, then the new): each changed
+pixel either held one of the old BG-derived colours and now holds exactly its new value (17.0 M and 0.61 M pixels), or
+moved by at most one RGB565 step per channel (an edge blended over the background; 1.13 M and 48 k); none else.
+**Checked**: `CR_VERSION=0.25.1 sh tests/run_all.sh` ALL SUITES PASSED (23 suites; test_cr 1086 ok, test_persist 119;
+317 golden renders, 0 changed; 0 lint); `BOARD=smk37 ./build.sh` builds (XIP 541 604 B of 573 440, 94.4 %);
+`./build.sh`: XIP 542 828 B of 573 440 (94.7 %), RAM 80 544, POOL 308 508, as 0.25.1 (a palette value and a named colour
+change, no code). Before / after of the chord view and the editor's OSC and FILTER pages (the manual's shots) in the
+sessions' notes folder, `black-bg-3y185/`. Not pushed. No device.
