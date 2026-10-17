@@ -110,7 +110,7 @@ XIP 429140 B of 581564 (73.8%), RAM 84176 B of 98304 (85.6%), POOL 327000 B of 3
 Added: RAMTEXT 60 B (`.c1_text`); RAM ~3.9 KB (core 1's stacks 2816 + 256 B, FM6's second scratch 384 B, the
 matrix per part ~150 B, `cr_dbg` ~200 B, the job's state); POOL 256 B (the bass part's block and stereo side,
 `c1_buf` / `c1_side`); XIP ~3 KB. 3y46 added `p5x_buf` (128 B of POOL) and the list; 3y177 `p5x_side` (128 B of POOL),
-424 B of XIP and, with `CR_RAM_VA` on, 9048 B of RAMTEXT (16 120 of 24 576).
+424 B of XIP and, with `CR_RAM_VA` on, 9048 B of RAMTEXT (16 120 of 24 576); 3y187 (FM6) 944 B of XIP.
 
 ## The job protocol (`fx.c mix_parts_split`, `cr_cpu1.h`)
 
@@ -239,8 +239,20 @@ a UNISON chord with USPREAD; ThreadSanitizer clean), test_cr.sh `cr_va_eight` (e
 inline = `EMU_C1=thread` bit for bit, core 1's average job about core 0's; `EMU_C1=nostart` seven under the bass, one
 core's budget; `EMU_C1=hang` one core's WAV, Dual Core Off). The goldens did not change.
 
-FM6 is next (it needs a third `fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass); CZ-1, FM TONE and
-GRAIN would each need their audit first (docs/notes/melodee-p5-dualcore-review.md "The other engines").
+### FM6's chord on both cores (3y187)
+
+`ENG_FM6.split` 20 (a voice 200 us, the unit's TINE EP). The audit (docs/FM6.md "Two cores") found two shared
+things in a voice's render, both fixed without new RAM: **the render's scratch is now the core's, not the part's**
+(`CR_C1_IDX`: `CR_C1_SELF()`, the `cnum` register; core 1 renders the bass and its chord voices one after the other
+with its one `fm6_scr`, so the third scratch the review expected, 384 B, is not needed), and **the part's AMS shares
+are figured in `fm6_block`** on core 0 before the hand-over, so the voices only read them. ThreadSanitizer without
+either: 10 / 4 reports; with both: none. XIP +944 B (94.9 %), RAM and POOL +0. Proof: `tests/cr_c1_thread_test.c`
+six FM6-chord pairs (an FM6, VA, P5, CZ-1 bass; TINE EP over DEEP SUB; a patch with AMS on every operator and the
+LFO's AMD: its shares in use in 2948 of 3000 blocks), test_cr.sh `cr_fm6_eight` (inline = `EMU_C1=thread` =
+`EMU_C1=nostart`, one core's WAV, bit for bit); the goldens, one core and two, unchanged.
+
+CZ-1, FM TONE and GRAIN would each need their audit first (docs/notes/melodee-p5-dualcore-review.md "The other
+engines").
 
 Publishing job 1 before core 0 has prepared all of the chord's voices (Melodee's per-job publishing) needs a mailbox
 deeper than `fm1_c1_post`'s one job (core 1's voices are prepared by core 0 in `track_render_x`): not done.

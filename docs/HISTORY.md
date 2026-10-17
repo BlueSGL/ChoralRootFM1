@@ -6031,3 +6031,43 @@ moved by at most one RGB565 step per channel (an edge blended over the backgroun
 `./build.sh`: XIP 542 828 B of 573 440 (94.7 %), RAM 80 544, POOL 308 508, as 0.25.1 (a palette value and a named colour
 change, no code). Before / after of the chord view and the editor's OSC and FILTER pages (the manual's shots) in the
 sessions' notes folder, `black-bg-3y185/`. Not pushed. No device.
+
+## 2026-10-17 (FM6's chord voices on both cores)
+
+3y187. **FM6's chord voices on both cores, as the VA's (3y177) and P5's (3y46)** (the orchestrator's go, after B's
+readings; numbered after main's 3y186 so that nothing is renumbered at the merge). `ENG_FM6.split` 20 (`FM6_VOICE_US`
+200: TINE EP 8 notes, part0 1524 .. 1627 on the unit under B). **The audit** (docs/FM6.md "Two cores") found two
+things a voice's render shared. (1) **The render's scratch** (`fm6_scr`: the modulator buses and the voice's sum) was
+chosen by part (`CR_C1_IDX`: part 1 on core 1), so core 1's chord voices would have used core 0's. It is now chosen by
+the core that runs (`CR_C1_SELF()`: the `cnum` register on the device, `hal/fm1_cpu1.h fm1_cnum`; a thread-local on
+the host's job thread; 3y45's part test kept for the inline stub). Core 1 renders the bass part and then its chord
+voices one after the other, so its one scratch serves both: **no third `fm6_scr`** (the review's 384 B). (2) **The
+part's AMS shares** (`P->pt.amd`, `pok`, `pt[]`) were figured lazily in `fm6_control` by the first voice of a block to
+need one. Every voice of a block has the part's one modulation (`fm6_amd`, split out: the LFO, its delay, the
+controllers, the EG bias), so `fm6_block` now figures the shares on core 0 before the hand-over, for the operators
+that sound and when a voice is active (`fm6_ams_share`, the old code moved; both `always_inline`, so `fm6_control`
+compiles as it did); the voices then only read them. The same values, so the same samples. **Proof that both were
+needed**: ThreadSanitizer with the scratch by part: 10 reports (`fm6_op`'s buses); with the shares lazy: 4
+(`fm6_ams_share`); with both changes: 0 over 22 pairs. `CR_RAM_FM6=1` linked no more (`fm6_block` in flash now calls
+`fm6_mulhi` in RAM through the inlined share): a veneer in `cr_ram.c`; with `CR_RAM_VA` beside it RAMTEXT 22 372 of 24
+576, `ram_code.py cmp` 0 functions differ. **Cost**: RAM +0, POOL +0, XIP +944 B (543 252 -> 544 196 of 573 440, 94.9 %;
+RAMTEXT 16 120 as B). Single-core package: XIP 541 200 (94.4 %), RAM 77 420. SMK-37: XIP 542 924 (94.7 %), RAMTEXT 16
+260, RAM 81 340. **Tests**: `tests/cr_c1_thread_test.c` 22 pairs (+3: FM6 chord over CZ-1, TINE EP over DEEP SUB, a
+patch with AMS 1..3 on every operator and the LFO's AMD 90, whose shares were in use in 2948 of 3000 blocks); for
+the six FM6-chord pairs inline = thread = unsplit = all to core 1 = none, every sample, each core rendering chord voices (four and four over an FM6, VA
+or CZ-1 bass; over a P5 stack of four, core 1 up to four and core 0 all eight in its blocks).
+test_cr.sh `cr_fm6_eight` (new: TINE EP 8 MIDI notes, DEEP SUB, a chord change): eight voices and the bass,
+inline = `EMU_C1=thread` = `EMU_C1=nostart` (eight FM6 voices and the bass fit one core's budget) bit for bit, the
+WAV 765c033's; `EMU_C1=hang` one core's WAV for the first 6.4 s, Dual Core Off; test_cr 1098 ok. **Bit-exact, one core
+and two**: the 317 goldens (one core) unchanged; built with `CR_CPU1=1` and core 1 alive
+(`build/scratch/va-split/goldens_c1.sh`), split = unsplit for all 317, and that set = 765c033's = 13b0adb's.
+**The emulator** (`cr_fm6_eight`, device us a half, avg / max): part0 249 / 684 and part1 28 / 113 before (765c033),
+146 / 578 and 145 / 418 after (a second run 146 / 461, 145 / 392). **The estimate for the unit** (not measured): under B
+TINE EP over DEEP SUB is block 2468 dry / 2565 recording, part0 1524 / 1627, part1 249 / 257, no late half and no shed.
+Four voices a core would take the longer side to about 950 .. 1000; the emulator's peaks fall less than its averages
+(16 .. 33 % against 41 %: the peak blocks hold core 0's own `fm6_block`, the released voices' ghost ticks after a
+chord change, the patch sync). So the worst half about 250 .. 550 us lower: dry about 1900 .. 2200 (66 .. 76 %),
+recording about 2000 .. 2300 (69 .. 79 %). Headroom, not a fix: the recording row's spare goes from 12 % of the half to
+about 20 .. 30 %. **Package C** (B + this, the default `./build.sh`): `build/scratch/va-split/choralroot-C-fm6-split.fwsc`,
+610 313 B, sha256 213076576bff30681d6a971d74dfe84dd036b5a1c55bff4012c945758bad0d2b. **Checked**: `sh tests/run_all.sh` ALL
+SUITES PASSED (23; test_cr 1098 ok, 317 goldens unchanged, 0 lint), its build package C byte for byte. No device.

@@ -65,4 +65,6 @@ CR_VENEER(void, fm6_control, (track_t *t, voice_t *v, fm6_voice_t *s, const vmod
 /* fm6_control, fm6_eg_step (RAM) -> an envelope's next segment (flash: note-on and the patch sync use them too) */
 CR_VENEER(void, fm6_eg_go, (fm6_eg_t *e, const uint8_t *op, int32_t ol, int32_t rs, uint32_t ix), (e, op, ol, rs, ix))
 CR_VENEER(void, fm6_peg_go, (fm6_peg_t *e, uint32_t ix), (e, ix))
+/* fm6_block (flash: the AMS shares figured before the hand-over since 3y187, fm6_ams_pt inlined there) -> fm6_mulhi */
+CR_VENEER(uint64_t, fm6_mulhi, (uint64_t a, uint64_t b), (a, b))
 #endif
