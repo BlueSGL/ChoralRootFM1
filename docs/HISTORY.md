@@ -5891,9 +5891,14 @@ orchestrator pushes main and tags v0.25.1; no SMK tag). No device.
 
 3y177. **The VA chord's voices on both cores, as P5's since 3y46 (item 1 of docs/notes/melodee-p5-dualcore-review.md,
 the review of Kerem Kilic's nightly dual-core scheduling for Melodee; the ideas alone, no code taken).** The unit's
-heaviest case was a VA chord rendered whole on core 0: MORPH PAD, 8 notes, over PUNCH BASS, part0 2293 us and a block
-of 3121 of 2902 (108 %, +26 voices shed in 20 s) while core 1 waited after its 355 us bass (docs/INTEGRATION.md
-"Measured on the unit"). `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
+heaviest case was a VA chord rendered whole on core 0: MORPH PAD, 8 notes, over PUNCH BASS. **Before, on the owner's
+unit** (5BD75BE3, ChoralRoot 0.25, Dual Core On, 2026-10-17; `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us
+of 2902; docs/notes/melodee-p5-dualcore-review.md): va block 3256 (112 %), tick 354, part0 2397, part1 375, fx 484,
+master 159, wait 175, t5 308, wall 3547, late 36, stale 0, shed 30 since power-on, averages 2079 / p0 1540 / fx 341;
+fm6 (TINE EP + DEEP SUB) block 2799 (96 %), part0 1764, part1 641, fx 529, wait 184, late 2, shed 11 in the run,
+averages 1669 / p0 1072 / fx 361. Against 2026-10-14 (docs/INTEGRATION.md "Measured on the unit": block 3121, part0
+2293) the fx stage fell (611 -> 484, 3y50) but part0 did not: the chord on core 0 alone is the overload, while core 1
+waits after its 375 us bass; and FM6 now sheds dry too. `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
 (`VA_VOICE_US` 280, the unit's row / 8), 0 for the rest; `fx.c mix_parts_split` splits the chord part when its engine
 has it (was `P5_IS(t0)`). The protocol is 3y46's, unchanged: core 0 prepares every voice before the ONE hand-over
 (`voice.c track_render_x`, the `p5x` list), `c1_part1_job` renders the bass part and then core 1's share, now through
@@ -5929,7 +5934,8 @@ check on the first run (its `c1 gave up` is printed with EMU_STAGES only: set), 
 317 golden renders, 0 changed; 0 lint. **For the owner's unit** (not run): `build/scratch/va-split/` in this worktree,
 package A (the default build) sha256 d2f42420dd0b735b3a19808b3c9e7e65520b610199f5a52c62b84550394ed7b5 and B (`CR_RAM_VA=1`)
 3d13fb10307b0baae1fb1ff978e78bcda73297edf5ed644ded5ccf3b13f63ed2, 610 313 B each, with README.txt's plan: `perf_unit.py
-va fm6 --seconds 20` dry and `--record` on 0.25 first, a backup, A, B (power-cycle and `--debug` once after each), back
-to the release. Expected (estimates): part0 about 1250 .. 1450, part1 about 1300 .. 1500 (core 1 the longer side), the
-block about 2400 .. 2600 instead of 3121, no shed dry; fm6 unchanged (the control). Next: FM6's chord (a third
+va fm6 --seconds 20` dry (done: the before above) and `--record` on 0.25 first, a backup, A, B (power-cycle and `--debug` once after each), back
+to the release. Expected (estimates, from the before: 2397 / 8 = 300 us a voice): part0 about 1300 .. 1500, part1 about 1450 ..
+1650 (the bass and four voices: core 1 the longer side), the block about 2450 .. 2650 instead of 3256 (84 .. 91 %), no
+shed dry; fm6 unchanged (the control: FM6 is not split yet, and its dry shed is the next step's case). Next: FM6's chord (a third
 `fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.

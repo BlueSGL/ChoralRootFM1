@@ -199,7 +199,8 @@ for 6, 2 + 2 for 4 (an odd one to core 1); it was not changed then.
 
 The unit's heaviest case was a VA chord on core 0 alone: MORPH PAD, 8 notes, over PUNCH BASS, part0 2293 us and a
 block of 3121 of 2902 (108 %, 26 voices shed in 20 s), while core 1 waited after its 355 us bass (docs/INTEGRATION.md
-"Measured on the unit"). The review of Melodee's dual-core scheduling (docs/notes/melodee-p5-dualcore-review.md, item
+"Measured on the unit"); on 0.25 (2026-10-17, the reading before this change) part0 2397, block 3256 (112 %), late
+36, while core 1's bass took 375. The review of Melodee's dual-core scheduling (docs/notes/melodee-p5-dualcore-review.md, item
 1) found this the largest gain available. What changed, and what did not:
 
 - **Which engines split**: `engine_t.split`, a voice's weight in 10 us (P5 44, the VA 28; 0 = the part renders whole
