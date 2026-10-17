@@ -249,10 +249,15 @@ static int st_stock_intact(void)                /* the marker over the stock lay
         }
     return 1;
 }
-static void st_stock_release(void)              /* erase the marker's sector, once: later calls find no marker */
+static int st_stock_release(void)               /* erase the marker's sector, once: later calls find no marker. Not
+                                                   * gone (a flash error): -10, and storage_hw.c refuses the USRFLASH
+                                                   * write it was asked for, so the stock firmware never trusts a
+                                                   * mapping ChoralRoot has written over */
 {
-    if (st_stock_tagged())
-        st_erase(FL_STOCKTAG_LO);
+    if (!st_stock_tagged())
+        return 0;
+    st_erase(FL_STOCKTAG_LO);
+    return st_stock_tagged() ? -10 : 0;
 }
 static inline int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
 static void st_smk_clear(void)
@@ -593,17 +598,22 @@ static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (s
  * was there, their 10..15 are this build's 9..14 as they are (a pool sector carries no number). A valid pool commit
  * record at 0xEA000 is moved to sector 15 (0xF1000, never written by those builds) when that is blank: the pages copied, the record's page last, read
  * back; then 0xEA000 is erased (FL_STOCKTAG, its one erase). A cut before the erase: the next scan finds the same
- * copy at 0xF1000 and erases 0xEA000. Once a power-on (sp_scan). */
+ * copy at 0xF1000 and erases 0xEA000. A cut during the copy leaves sector 15 written without its commit record (the
+ * record's page goes last): such a sector is no pool copy (sp_scan skips it, sp_target erases it before use), so it is
+ * erased and the copy made again; a sector 15 that holds a valid record of its own is left, and 0xEA000 with it. Once
+ * a power-on (sp_scan). */
 static uint8_t sp_old_done;
 static void sp_old_move(void)
 {
-    st_hdr_t h;
+    st_hdr_t h, t;
     uint32_t to = sp_addr(SP_NSEC - 1u), off, same = 1;
     if (sp_old_done || ST_BLOCKED())
         return;
     sp_old_done = 1;
     if (st_read(FL_STOCKTAG_LO, &h, sizeof h) || h.magic != ST_MAGIC || h.type != SP_TYPE || h.slot >= SP_NBANK ||
         h.len != ST_PAYLOAD_MAX || h.rsv[0] != SP_VER || h.hcrc != st_crc32(&h, sizeof h - 4u))
+        return;
+    if (!st_blank(to) && sp_head(SP_NSEC - 1u, &t) && st_erase(to))   /* (a copy the power cut: again) */
         return;
     if (st_blank(to))
         for (off = ST_SECTOR; off; ) {          /* the record's page (0) last */

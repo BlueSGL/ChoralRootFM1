@@ -85,8 +85,8 @@ def smk_check(fm1_versions, smk_tags):
     data = json.loads(f.read_text(encoding="utf-8"))
     rel = data["releases"]
     vers = [r["version"] for r in rel]
-    ok(all(re.fullmatch(r"\d+\.\d+(\.\d+)?(-[A-Za-z0-9.]+)?-smk37", v) for v in vers) and len(set(vers)) == len(vers),
-       f"SMK: versions X.Y[-suffix]-smk37, none twice: {', '.join(vers) or 'none'}")
+    ok(all(re.fullmatch(r"\d+\.\d+(\.\d+)?(-[A-Za-z0-9.]+)?-smk37(\.\d+)?", v) for v in vers) and len(set(vers)) == len(vers),
+       f"SMK: versions X.Y[-suffix]-smk37[.N] (.N: a respin on the same base), none twice: {', '.join(vers) or 'none'}")
     ok(re.match(r"https://github\.com/[\w-]+/[\w-]+$", data.get("repo", "")) is not None and len(data.get("about", "")) > 40,
        "SMK: the repository, the about text")
     sums = []
@@ -173,7 +173,7 @@ def main():
         ok(cur in vers, f"the firmware's version {cur} is tagged: it is in the list")
     else:
         print(f"note: the firmware reads {cur}, not tagged here: it need not be in the list yet (docs/HANDOFF.md, 'Release steps')")
-    smk_tags = [t for t in tags if t.endswith("-smk37")]   # (the SMK-37 test builds: their own list, below)
+    smk_tags = [t for t in tags if re.search(r"-smk37(\.\d+)?$", t)]   # (the SMK-37 test builds: their own list, below)
     tags = [t for t in tags if t not in smk_tags]
     for t in [t for t in tags if num(t[1:]) >= num(minimum)]:
         ok(t[1:] in vers, f"the tag {t} is in the list")

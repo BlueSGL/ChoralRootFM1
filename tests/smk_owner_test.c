@@ -28,14 +28,20 @@ static uint8_t nor[0x100000];
 static int bad_write;
 static int tag_erases, usr_before_tag;
 static int pool_progs, pool_last;                  /* programs into the pool's sector 15 (0xF1000), the last page's */
+static int pool_erases;                            /* .. and its erases */
+static int tag_erase_fails;                        /* the marker sector's erase fails (a flash error) */
 static int in_regions(uint32_t s);
 static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
 {
     if ((off & 0xFFFu) || !(in_regions(off) || off == 0xAF000u || off == 0xEA000u))
         bad_write++;
+    if (off == 0xEA000u && tag_erase_fails)
+        return -2;
     if (off == 0xEA000u)
         tag_erases++;
+    else if (off == 0xF1000u)
+        pool_erases++;
     else if (off >= 0xC2000u && off < 0xEA000u && nor[0xEAFF8] == 'u')
         usr_before_tag++;                          /* a USRFLASH erase while the stock marker is still there */
     memset(nor + off, 0xFF, 0x1000);
@@ -241,13 +247,33 @@ int main(void)
         sp_scan();
         check("... cut before its erase: the next power-on erases 0xEA000, programs nothing",
               pool_progs == 0 && tag_erases == 1 && all(0xEA000, 0xEB000, 0xFF) && !memcmp(nor + 0xF1000, old, sizeof old));
-        memcpy(nor + 0xEA000, old, sizeof old);
-        memset(nor + 0xF1000, 0x00, 0x1000);       /* sector 15 written with something else: no move */
-        pool_progs = 0; tag_erases = 0;
+        memcpy(nor + 0xEA000, old, sizeof old);    /* a cut during the copy: sector 15's pages written but its first
+                                                    * (the commit record's), so no valid record there */
+        memset(nor + 0xF1000, 0xFF, 0x1000);
+        memcpy(nor + 0xF1000 + 0x800, old + 0x800, 0x800);
+        pool_progs = 0; tag_erases = 0; pool_erases = 0; pool_last = -1;
         sp_old_done = 0; sp_scanned = 0;
         sp_scan();
-        check("... sector 15 not blank and not the copy: nothing written, nothing erased",
-              pool_progs == 0 && tag_erases == 0 && !memcmp(nor + 0xEA000, old, sizeof old));
+        check("... cut during the copy: sector 15 erased, the copy again (record last), then 0xEA000 erased",
+              pool_erases == 1 && pool_progs == 16 && pool_last == 0 && tag_erases == 1 && all(0xEA000, 0xEB000, 0xFF) &&
+              !memcmp(nor + 0xF1000, old, sizeof old) && sp_cur[4] == SP_NSEC - 1u);
+        {   /* sector 15 with a valid record of its own (another bank): nothing moved, nothing erased */
+            st_hdr_t o = h;
+            memcpy(nor + 0xEA000, old, sizeof old);
+            memset(nor + 0xF1000, 0xFF, 0x1000);
+            for (i = 0; i < ST_PAYLOAD_MAX; i++)
+                nor[0xF1000 + ST_PAYLOAD_OFF + i] = (uint8_t)(i * 5u + 1u);
+            o.slot = 6; o.seq = 90;
+            o.crc = st_crc32(nor + 0xF1000 + ST_PAYLOAD_OFF, ST_PAYLOAD_MAX);
+            o.hcrc = st_crc32(&o, sizeof o - 4u);
+            memcpy(nor + 0xF1000, &o, sizeof o);
+            pool_progs = 0; tag_erases = 0; pool_erases = 0;
+            sp_old_done = 0; sp_scanned = 0;
+            sp_scan();
+            check("... sector 15 holding a valid record of its own: nothing written, nothing erased",
+                  pool_progs == 0 && tag_erases == 0 && pool_erases == 0 && !memcmp(nor + 0xEA000, old, sizeof old) &&
+                  sp_cur[6] == SP_NSEC - 1u);
+        }
         stock();                                   /* the stock layout at 0xEA000 (its marker): no pool record */
         memset(nor + 0xF1000, 0xFF, 0x1000);
         pool_progs = 0; tag_erases = 0;
@@ -256,6 +282,13 @@ int main(void)
         check("... the stock marker's sector (no pool record): left as it is", pool_progs == 0 && tag_erases == 0 &&
               st_stock_tagged() && st_stock_intact());
     }
+    stock();                                       /* the marker's erase fails: the release says so (storage_hw.c
+                                                    * then refuses the USRFLASH write it was asked for) */
+    tag_erase_fails = 1;
+    check("a marker that cannot be erased: the release answers -10, the marker and the mapping as they were",
+          st_stock_release() == -10 && st_stock_tagged() && st_stock_intact());
+    tag_erase_fails = 0;
+    check("... erasable again: released, 0", st_stock_release() == 0 && !st_stock_tagged() && st_stock_release() == 0);
     check("nothing written outside ChoralRoot's data sectors, the tag and the stock marker sector", bad_write == 0);
     printf("%s\n", bad ? "SMK OWNER TEST FAILED" : "smk owner test passed");
     return bad != 0;

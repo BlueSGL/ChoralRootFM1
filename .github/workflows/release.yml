@@ -3,7 +3,8 @@
 # (choralroot-X.Y-1core.fwsc, docs/DUALCORE.md "Two packages"), both from one ./build.sh --release.
 #   push of a tag vX.Y  -> build, create or update the GitHub release vX.Y with the assets, then run pages.yml
 #   workflow_dispatch   -> build only; the package is a workflow artifact (choralroot-X.Y)
-# An SMK-37 test build (SMK37.md) has a version that ends in -smk37 (tag vX.Y[-suffix]-smk37, e.g. v0.24-beta2-smk37):
+# An SMK-37 test build (SMK37.md) has a version that ends in -smk37 (tag vX.Y[-suffix]-smk37, e.g. v0.24-beta2-smk37;
+# -smk37.N for a respin of the SMK build on the same FM-1 base, e.g. v0.24-beta3-smk37.1):
 # the three models (BOARD=smk37 MODEL=pro|elite|mke ./build.sh --release X.Y-smk37 into build/release-smk37/), always a
 # pre-release, and the site rebuilt from that tag for the FM-1's current version (web/releases.json's first entry,
 # unchanged) so that the SMK-37 test installer (webapp/smk37/, web/releases-smk37.json) offers the new build; only when
@@ -55,12 +56,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = push ]; then v="${GITHUB_REF_NAME#v}"; else v="$INPUT_VERSION"; fi
-          if [[ "$v" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.]+)?-smk37$ ]]; then
-            board=smk37                 # the SMK-37 test build (SMK37.md)
+          if [[ "$v" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.]+)?-smk37(\.[0-9]+)?$ ]]; then
+            board=smk37                 # the SMK-37 test build (SMK37.md); -smk37.N: a respin on the same FM-1 base
           elif [[ "$v" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.]+)?$ ]] && [[ "$v" != *smk* ]]; then
             board=fm1
           else
-            echo "::error::version '$v' is not X.Y, X.Y.Z or X.Y-suffix (FM-1), nor X.Y[-suffix]-smk37 (SMK-37); tags are vX.Y"
+            echo "::error::version '$v' is not X.Y, X.Y.Z or X.Y-suffix (FM-1), nor X.Y[-suffix]-smk37[.N] (SMK-37); tags are vX.Y"
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"

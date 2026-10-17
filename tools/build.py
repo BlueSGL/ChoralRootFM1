@@ -618,8 +618,9 @@ def main():
     if a.release and BOARD != "fm1":   # the SMK test build: the three models in one folder (above)
         rel = OUT / f"release-{BOARD}"
         rel.mkdir(parents=True, exist_ok=True)
-        for f in rel.iterdir():         # another version's packages and apps go (this one's other models stay)
-            if f.is_file() and f.name.endswith((".fwsc", "-app.bin")) and not f.name.startswith(f"{UNIT}-{a.release}"):
+        mine = re.compile(re.escape(f"{UNIT}-{a.release}") + r"(-elite|-mke)?(-1core)?(\.fwsc|-app\.bin)")
+        for f in rel.iterdir():         # another version's packages and apps go (this one's other models stay; the
+            if f.is_file() and f.name.endswith((".fwsc", "-app.bin")) and not mine.fullmatch(f.name):   # .N respin's too)
                 f.unlink()
         (rel / "LICENSES").mkdir(exist_ok=True)
         files = ((name, pkg), (name[:-5] + "-app.bin", bytes(img)), (name1, one[0]), (name1[:-5] + "-app.bin", one[1]))

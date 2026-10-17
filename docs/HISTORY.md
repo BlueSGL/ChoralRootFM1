@@ -5433,3 +5433,36 @@ byte-identical to 268d3d6's (choralroot.fwsc 0654f106.., choralroot.bin 3d5d0805
 4e33bfbb.., the ELFs too). `BOARD=smk37 [MODEL=elite|mke] ./build.sh`: Pro 34821d76..ca05, Elite 467ae6da..6a44,
 MKE-P37 70c5e472..b2b0; XIP 538 564 B (Elite 538 580), RAM 80 940, POOL 306 196. Installed on an SMK-37 Pro over
 another firmware: it starts.
+
+3y161. **PR #22 reviewed as flash code, on main 355fd58 (branch claude/smk37-stock-mapping; merge 0978653).** Checked:
+no path reaches 0x0-0x3FFF, 0xC0000-0xC1FFF, 0xF4000-0xFDFFF or 0xFF000.. (the windows and `FL_PROTECTED` unchanged;
+`FL_STOCKTAG_OK` admits exactly 0xEA000 as a whole 4 KiB erase, outside `FL_STORE_OK`, so `st_prog` and the RAM
+driver refuse any program there: smk_flash_test); every write into USRFLASH goes through storage_hw.c's `st_erase` /
+`st_prog` (the CZ-1 banks, the loop slots in cr_ui.c, the pool, Options > Flash Data's `ST_SMK_REGIONS`, a restore
+through st_save / the pool; nothing else calls the RAM driver), so the marker's release precedes each of them. Found
+and changed: (1) a cut DURING `sp_old_move`'s copy left sector 15 written without its commit record, and every later
+power-on gave up ("not blank, not the copy"), so the bank copy at 0xEA000 was never read again: now a sector 15 with no
+valid pool record is erased and the copy made again (one with a valid record of its own is still left, and 0xEA000
+with it); (2) `st_stock_release` ignored a failed erase, and the USRFLASH write went on with the marker standing (the
+one-note state again): it now answers -10 when the marker is still there and `st_erase` / `st_prog` refuse the
+USRFLASH write. smk_owner_test: the cut during the copy, a valid record in sector 15, the failed and the repeated
+release. Not changed, noted: the intact-mapping check (the settings' magic A3 3A at 0xC2000, each preset's head
+written and its last two sectors erased) is genkigenki's reading of the stock firmware; the porting guide does not
+describe the stock USRFLASH layout or the marker, so it is checked against the PR alone (it is consistent with the
+stock region table: USRFLASH 0xC2000 + 0x29000, the marker in its last 8 bytes, eight presets of 0x5000 from
+0xC3000). A false "intact" keeps another firmware's data unparsed (our records' magic and CRC refuse it) and the first
+write releases the marker anyway; a false "not intact" costs a custom stock mapping, the factory one coming back.
+**The PR's premise, corrected:** 0.24-beta2-smk37 and beta3-smk37 erase 0xEA000 at an owner change (their pool run
+0xE6000 x 11 covers it): a unit that went from the stock firmware (or another port) straight to them had its marker
+released at the first start. The marker survives on units that ran genkigenki's earlier 0.22 build first (its clearing
+stopped at 0xE5FFF; the later beta, the same family, cleared nothing): those return to stock with one-note keys.
+SMK37.md "If every key sends the same note after going back": who, and the recovery (install the fixed build, start it
+once: the boot's check releases the marker over non-stock data; then M-UPGRADE back: the stock firmware rebuilds its
+factory mapping). **The respin's name:** release.yml's SMK version had to end in -smk37 and releases_test.py wants it
+to start with its FM-1 base and a dash, so on 0.24-beta3 only 0.24-beta3-smk37 (taken) was valid; now an optional .N
+(`-smk37.1`: release.yml's version check, releases_test.py's version and tag patterns; tools/build.py took it already,
+and its SMK release folder now drops another version's files by the exact name, a .1 beside its base no longer
+counted as the base's). Checked: `./build.sh --release 0.24-beta3` gives v0.24-beta3's cdb6a2b5... / 7e17f335...;
+`BOARD=smk37 [MODEL=elite|mke] ./build.sh`: XIP 538 484 / 538 500 / 538 484 B of 573 440, RAM 80 940, POOL 306 196;
+smk_flash_test (21 checks) and smk_owner_test (22) pass; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23
+suites); `./build.sh` last (5f1102a1..., main's). Not pushed, not tagged; no release packages built.

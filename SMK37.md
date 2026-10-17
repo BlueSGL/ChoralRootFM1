@@ -133,6 +133,25 @@ USRFLASH (the stock firmware rebuilds it at its first start).
 Going back to genkigenki's earlier ChoralRoot build (0.22) works too: it finds the sounds it had, but not the ones saved
 on 0.24 (they are in the sound pool, which it does not know).
 
+### If every key sends the same note after going back
+
+The stock firmware keeps its key, knob and fader mapping in USRFLASH and trusts it as long as its end marker
+(`usrdata` at 0xEAFF8) is there. Builds before the fix in 0.24-beta3-smk37.1 could leave that marker standing over
+ChoralRoot's own data, and the stock firmware then reads ChoralRoot's data as its mapping: every key sends one note.
+From the code, the units that can be affected are those that ran genkigenki's earlier ChoralRoot build for the SMK-37
+(0.22, from his web installer) at any point: its first start cleared USRFLASH only up to 0xE5FFF, so the marker
+stayed, and a later 0.24-beta2-smk37 or 0.24-beta3-smk37 kept it too (the same data family: no clearing). A unit that
+went from the stock firmware straight to 0.24-beta2-smk37 or 0.24-beta3-smk37 had the marker erased at that first
+start (their clearing reached 0xF0FFF), so its stock firmware rebuilds the factory mapping; if such a unit does show
+one-note keys, please report it, because then the cause is something else.
+
+**What recovers it:** install 0.24-beta3-smk37.1 or later, switch the keyboard on once (the first start finds the
+marker over data that is not the stock mapping and erases it; nothing else of the stock firmware's is touched), then
+go back to the stock firmware with M-UPGRADE as above. At its next start the stock firmware finds no marker and builds
+its factory mapping again: every key its own note. A custom stock mapping you made before ChoralRoot is not brought
+back (ChoralRoot's data had already replaced it). The stock firmware's own reset may also rebuild the mapping, but that
+is not documented in the porting guide and has not been tried; the way above follows from the code.
+
 ## Storage
 
 ChoralRoot writes only inside its own windows of the SMK-37's flash (`firmware/hal/fm1_flash_map.h`), and the flash
