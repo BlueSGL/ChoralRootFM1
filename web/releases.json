@@ -8,6 +8,28 @@
   },
   "releases": [
     {
+      "version": "0.24",
+      "date": "2026-10-16",
+      "tag": "v0.24",
+      "sha256": "c7c26624026d912d827764b19fb91f12af91b69a2e623d7900ae65bcb447b25b",
+      "sha256_1core": "cc9b905943c3ce27d2210d6f47d5541eebd8a957e08a10c4d51d75d43b0f45c4",
+      "title": "FM-1 chord keys, MIDI Keys, GRAIN, velocity on all 27 keys",
+      "bullets": [
+        "Options > Chord Keys: FM-1, a second layout for this keybed: DIM MIN MAJ on F#3 G#3 A#3, SUS = G#3 + A#3 with one finger, B3 the 9, C4 and C#4 roots, LOCK on LFO.",
+        "The SUS Window (30 ms by default): a root pressed while the pair lands waits and plays once, so a minor chord never turns into a sus chord under your fingers.",
+        "With the FM-1 chord keys LATCH is GLO held + LFO; the LFO light is steady for LOCK and pulses for LATCH. Classic, the Orchid's layout, stays the default, unchanged.",
+        "MIDI Keys: a channel whose notes 53 to 79 press the FM-1's own keys, chord keys and LOCK included, through the layout you chose.",
+        "On the Full keyboard KNOB 1 is the voicing, and Options > Full K Shorts makes F#5 bring the chord keys back and G5 play a chord on every key.",
+        "GRAIN, a granular engine that makes its own sound: two sources from eight families, MORPH, SCAN, the VA's filter, two LFOs, a modulation matrix and eight presets.",
+        "All 27 keys sense velocity with Key Touch on; Vel + Poly AT sends polyphonic aftertouch; Geek Out 2 shows the touch.",
+        "SAFE MODE's Flash Data clears the saved sounds too; FM TONE uses about 27 KB less memory with the same sound."
+      ],
+      "notes": [
+        "Updating from 0.24-beta3, beta2, beta1 or 0.23 keeps your settings, sounds, loops and favorites; the chord keys stay Classic until you choose FM-1.",
+        "With Key Touch on, notes sound a few milliseconds later than in 0.23 (the keys wait for their velocity); with Key Touch at Fixed, the default, nothing changes."
+      ]
+    },
+    {
       "version": "0.24-beta3",
       "beta": true,
       "date": "2026-10-16",
@@ -91,7 +113,15 @@
       "notes": [
         "Updating from 0.22 keeps your settings, sounds, loops and favorites.",
         "FM TONE sounds at the Digitone's own levels (INIT, imported sounds and those made from them) play about 6 dB quieter, as loud as the other engines; BASS, SQUARE LEAD and WOBBLE are about 3.5 dB softer."
-      ]
+      ],
+      "going_back": {
+        "short": "Your settings, sounds, loops and favorites stay. You lose the FM-1 chord keys, MIDI Keys, GRAIN and velocity on the top seven keys.",
+        "points": [
+          "0.23 plays the Classic chord keys; with Chord Keys on FM-1, Full K Shorts on or the SUS Window off 30 ms it reads LATCH as off, and with MIDI Keys on Raw Chord Sound as Off. Nothing else is touched.",
+          "GRAIN sounds stay in their slots and play the VA's init sound on 0.23; they are GRAIN again when you come back. A part left on GRAIN starts on TINE EP or DEEP SUB there.",
+          "Key Touch Vel + Poly AT reads as Fixed on 0.23, and the top seven keys follow your playing again; KNOB 1 is the octave on the Full keyboard there."
+        ]
+      }
     },
     {
       "version": "0.22",

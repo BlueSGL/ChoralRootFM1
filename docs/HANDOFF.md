@@ -5,20 +5,16 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.23 (`git tag`; v0.23 is the latest stable release, on the site as the installer's
-default, notes in `docs/releases/`), the betas v0.22-beta1 .. v0.22-beta4, v0.24-beta1 (54467ac: the top row's velocity,
-Vel + Poly AT, Geek Out 2's touch, HISTORY 3y123 .. 3y125) and v0.24-beta2 (52889ba: GRAIN, 3y133 .. 3y141), GitHub
-pre-releases listed by the installer behind "Show beta releases"; and the SMK-37 community test build
-v0.24-beta2-smk37 (898fa5c, 3y142 .. 3y146: its own list `web/releases-smk37.json` and the unlinked page
-`webapp/smk37/`, SMK37.md). Since v0.24-beta2 main has gained the SMK-37 browser emulator (3y151 .. 3y153,
-`webapp/smk37/emu/`), FM TONE's HARM read from flash with a mirror (3y150: POOL 97.0 -> 89.0 %, the same sound bit for
-bit, the HARM presets about +9 % of the render) and SAFE MODE's Flash Data erasing the sound pool (3y154).
-**0.24-beta3's release tree** (HISTORY 3y156; tagged: not yet) lists 0.24-beta3 first in `web/releases.json` with
-`"beta": true` (sha256 cdb6a2b5..., single-core 7e17f335...) and 0.24-beta3-smk37 first in `web/releases-smk37.json`;
-notes `docs/releases/0.24-beta3.md` (Flash Data, FM TONE's memory, the SMK-37 builds, then 0.24-beta2's and
-0.24-beta1's notes, going back to 0.24-beta2 / 0.24-beta1 / 0.23), `docs/releases/0.24.md` the pointer to them; 0.23
-stays the newest stable entry. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the
-0.22 betas' trees read 0.22). The owner's unit runs what the orchestrator last flashed (0.24-beta3's package, 3y157):
+Released: v0.1 and v0.11 .. v0.24 (`git tag`; **v0.24 is the latest stable release**, HISTORY 3y165, on the site as the
+installer's default, notes in `docs/releases/`), the betas v0.22-beta1 .. v0.22-beta4 and v0.24-beta1 .. v0.24-beta3,
+GitHub pre-releases listed by the installer behind "Show beta releases"; and the SMK-37 community test builds
+v0.24-beta2-smk37, v0.24-beta3-smk37 and v0.24-beta3-smk37.1 (their own list `web/releases-smk37.json` and the unlinked
+page `webapp/smk37/`, SMK37.md). 0.24 over 0.24-beta3: the chord layouts (docs/CHORD-LAYOUT.md, HISTORY 3y155,
+3y163, 3y164): Options > Chord Keys Classic / FM-1, the SUS Window, LOCK on LFO, LATCH on GLO + LFO, Full K Shorts,
+MIDI Keys, KNOB 1 the voicing on the Full keyboard. `web/releases.json` lists 0.24 first (sha256 c7c26624...,
+single-core cc9b9059...), 0.23 with its going-back note. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24"
+(`firmware/src/choralroot.c`): the next release bumps it. No SMK-37 build of 0.24 yet (its list ends at
+0.24-beta3-smk37.1). The owner's unit runs 3y163's build (flashed 3y163; the version line reads ChoralRoot 0.24):
 check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)

@@ -5612,3 +5612,22 @@ decided at once (`cu_tk_press` -> `cu_tk_decide`): G#3, F#3, A#3, the pair, F#3,
 MAJ, SUS, DIM, MIN, MAJ, DIM, each replacing the last (`tools/emu/scripts/cr_fm1_lock.txt`, a check in test_cr), and
 F#3 again alone switches it off. G#3 and A#3 were right (they always open a gesture). The labels: the chord layouts
 ship in 0.24 (the owner: "a full v0.24 release"), so the "0.25" of 3y163's comments and docs reads 0.24.
+
+3y165. **0.24, the release (2026-10-16; the owner: "Once that's done, this is good to merge and tag for the next release
+which can be a full v0.24 release, not beta").** The tree: main c5884a9 + the chord layouts (3y155, 3y163, 3y164).
+`docs/releases/0.24.md` the release's notes (the FM-1 chord keys first, then MIDI Keys, Full K Shorts, KNOB 1 on the
+Full keyboard, Flash Data, FM TONE's memory, the SMK-37 builds, GRAIN and Playing in short with links to the betas'
+notes, Installing, Going back to 0.24-beta3 / beta2 / beta1 / 0.23 with what the new Options mean to an older version:
+LATCH read as off and the Classic layout, Raw Chord Sound Off with MIDI Keys on). `web/releases.json`: 0.24 first,
+stable, 8 bullets, 2 notes; 0.23 gets its going-back note (the newest stable before it had none). The site's Playing
+section: "The FM-1 chord keys" and `img/panel-main-fm1.png` (3y155's picture) linked. HANDOFF's state.
+**Built**: `./build.sh --release 0.24` twice (the first folder moved to `build/release-0.24.first`), the same
+SHA256SUMS: `choralroot-0.24.fwsc` c7c26624026d912d827764b19fb91f12af91b69a2e623d7900ae65bcb447b25b,
+`choralroot-0.24-1core.fwsc` cc9b905943c3ce27d2210d6f47d5541eebd8a957e08a10c4d51d75d43b0f45c4 (610 313 B each); the apps
+`ChoralRoot 0.24` and `ChoralRoot 0.24 1-core`. Size: XIP 541 948 B of 573 440 (94.5 %), RAM 80 368, POOL 306 196; the
+single-core package XIP 538 904, RAM 77 276. **Checked**: `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED on
+3y164's tree (23 suites, 110 s; test_cr 1086 ok, test_persist 113); `CR_PACKAGES_DIR=build/scratch/packages python3
+tests/releases_test.py` ALL OK with all 26 listed packages (`tools/fetch_packages.py`, curl; 0.24's two from this build);
+`tests/site_test.py` site ALL OK ("make_site.py --require-all builds the site for 0.24"). Merged into main
+(fast-forward) and tagged v0.24 here; release.yml builds the packages and pages.yml publishes the site. No SMK-37
+build of 0.24 (the owner did not ask for one).
