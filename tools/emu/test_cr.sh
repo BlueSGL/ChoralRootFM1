@@ -78,7 +78,7 @@ want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralro
 [ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
 vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
 vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
-[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 30 of 3[0-9] 'Version' value '$want'" "$L" &&
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 31 of 3[0-9] 'Version' value '$want'" "$L" &&
     ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
     || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
 lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
@@ -1859,9 +1859,9 @@ lp_sig() {
         sed 's/\/ /\//; s/ /+/g; s/\/$/\/-/' | tr '\n' ' ' | sed 's/ $//'
 }
 lp_latch() { lp_sig "$1" | tr ' ' '\n' | cut -d/ -f1 | tr '\n' ' '; }
-lp_run() {   # lp_run NAME BODY STYLE PUSHED KEEPS: the preamble (Options > Play Style, the LOCK layer, LOCK on) + the body
+lp_run() {   # lp_run NAME BODY STYLE PUSHED KEEPS: the preamble (the Classic chord keys, Options > Play Style, the LOCK layer on B3, LOCK on) + the body
     {
-        printf 'wait 300\nbtn GLO\nwait 200\nknob KNOB1 +%s\nwait 200\nbtn GLO\nwait 200\nbtn B3 600\nwait 300\n' "$3"
+        printf 'keys classic\nwait 300\nbtn GLO\nwait 200\nknob KNOB1 +%s\nwait 200\nbtn GLO\nwait 200\nbtn B3 600\nwait 300\n' "$3"
         [ "$4" = 1 ] && printf 'knob KNOB2 +1\nwait 200\n'
         [ "$5" = 1 ] && printf 'knob KNOB1 +1\nwait 200\n'
         printf 'btn OCT-\nwait 300\nbtn B3\nwait 200\n'

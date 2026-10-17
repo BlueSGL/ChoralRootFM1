@@ -114,6 +114,13 @@ void cr_settings_defaults(cr_settings_t *s)
                                                     * record that is there keeps what it holds: its Off cannot be
                                                     * told from 0.16 .. 0.21's default (docs/DUALCORE.md) */
     s->fx_on = 1;
+#if !BOARD_SMK37
+    s->sticky = CRS_LAYOUT_FM1;                    /* Options > Chord Keys FM-1 (0.26, the owner, 2026-10-16: "let's
+                                                    * make it the default"): a unit with no record, Flash Data, Reset
+                                                    * Settings. Moved already (CRS_KEYS_MOVED): the layout a record of
+                                                    * this firmware holds is the player's (the SMK-37: Classic, hidden) */
+    s->leds = CRS_KEYS_MOVED;
+#endif
     s->chord_sound = CRS_SOUND_DEFAULT;
     s->bass_sound = CRS_SOUND_DEFAULT;
     for (i = 0; i < (uint32_t)CRS_NENG; i++) {
@@ -234,7 +241,7 @@ static void crs_sanitize(cr_settings_t *s)
                                                     * and a record's Off is never turned On for it) */
         s->view = (uint8_t)(s->view & CRS_DC_ON);
     CRS_FIX(motion, 0, 2);
-    CRS_FIX(leds, 0, 1);
+    CRS_FIX(leds, 0, (int)(CRS_LEDS_STOCK | CRS_KEYS_MOVED));   /* (0.26: bit 1 the move to FM-1, CRS_KEYS_MOVED) */
     CRS_FIX(fx_on, 0, 1);
     CRS_FIX(metro_on, 0, 1);
     CRS_FIX(metro_sig, 0, 2);
@@ -368,6 +375,17 @@ int cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n)
          * was 0 in every older record and stays 0 */
     }
     crs_sanitize(s);
+#if !BOARD_SMK37
+    if (!(s->leds & CRS_KEYS_MOVED))               /* 0.26: a record no firmware since 0.26 has written (any version: 0.23
+                                                    * and older have no Chord Keys, 0.24 / 0.25 Classic or FM-1): FM-1,
+                                                    * once; the mark keeps a later Classic (cr_settings.h CRS_KEYS_MOVED).
+                                                    * The rest of the byte and the record as they were; rc unchanged (a
+                                                    * current record stays current: the session beside it is applied) */
+    {
+        s->sticky = (uint8_t)(s->sticky | CRS_LAYOUT_FM1);
+        s->leds = (uint8_t)(s->leds | CRS_KEYS_MOVED);
+    }
+#endif
     cr_settings_seal(s);
     return rc;
 }
@@ -797,7 +815,8 @@ static void crs_capture(cr_settings_t *s)
     s->split_pc = cs.split;
     s->view = (uint8_t)(CRS_VIEW_BYTE(cs.view, cs.view_lock) | (cs.dualcore ? CRS_DC_ON : 0u));
     s->motion = cr_motion;
-    s->leds = cs.leds;
+    s->leds = (uint8_t)((cs.leds ? CRS_LEDS_STOCK : 0u) | (s->leds & CRS_KEYS_MOVED));   /* (the record's mark, as
+                                                    * the import left it: set, but on the SMK-37) */
     s->fx_on = cs.fx_on;
     s->chord_sound = (uint16_t)((trk[CR_PART_CHORD].eng_req % NENGINES) << 8 | (cs.sound & 0xFFu));
     s->bass_sound = (uint16_t)((trk[CR_PART_BASS].eng_req % NENGINES) << 8 |
@@ -1150,7 +1169,7 @@ static void cr_settings_load(void)
     cs.dualcore = crs_dc_bar ? 0u : (uint8_t)CRS_DUALCORE(s);   /* (what this power-on did: cr_c1_off, cr_settings_boot;
                                                     * Off after a bar, crs_dc_bar) */
     cr_motion = s->motion;
-    cs.leds = s->leds;
+    cs.leds = (uint8_t)CRS_LEDS(s);                /* (bit 1: the move to FM-1, the record's) */
     palette_set(s->palette < NPALETTES ? s->palette : NPALETTES - 1u);
     for (i = 0; i < (uint32_t)NENG_SHOWN; i++) {    /* each part's place per engine (the pools: checked on use) */
         int32_t k = crs_slot(i);

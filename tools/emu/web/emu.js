@@ -93,6 +93,7 @@
     text(cx, cy + 35, hint("sel", i) || "", 8, C.hint, g, 700);
     encEl.push({ sel, ptr, a: 0 });
   }
+  setLayout(1);   // FM-1, the firmware's default Chord Keys since 0.26, until the first frame says otherwise
 
   // the panel's own little screen: a second canvas over SCREEN_A
   const mini = $("mini");

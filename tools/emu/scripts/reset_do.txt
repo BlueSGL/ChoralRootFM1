@@ -3,6 +3,7 @@
 # cancels, a closed menu forgets the ask, OCT+ twice resets: everything reads default at once (on the view, LOCK
 # off) and is saved; the unit plays on the default sound.
 #   Options: Reset Settings, the last entry (SELECT past the end stops on it)
+keys classic                  # (0.26: FM-1 is the default; this script was written for the Classic chord keys)
 wait 500
 dump                          # 1: as stored: Advanced, 137 BPM, Key Mode on, Motion Off, Dual Core Off
 btn B3                        # LOCK on, MAJ latched

@@ -2,6 +2,7 @@
 # test_cr.sh and perf.sh: on a fresh flash file (or one whose settings say On), this (KNOB 1 -1: Off), a relaunch with
 # cr_dualcore.txt ("c1 off", the shared budget), cr_dualcore_on.txt (On again), a relaunch ("c1 ok"). The value line says "Off . restart" until the next
 # power-on; saved past the save delay, quit
+keys classic                  # (0.26: FM-1 is the default; this script was written for the Classic chord keys)
 wait 500
 btn GLO 80
 wait 300

@@ -69,6 +69,10 @@ typedef struct {
      * firmware's knob acceleration, firmware/src/cr_pages.c kn_turn: the range / 20 a detent, the step of before
      * 0.22), for the scripts written against that step; real: the speed from the detents' times, as the unit */
     volatile uint8_t knob_quick;
+    /* the script's "keys classic" (emu.c load_script, read once at power-on by emu_fw.c): a unit with no settings record
+     * starts with Options > Chord Keys Classic, as one whose player chose it (0.26: FM-1 is the default; the scripts
+     * written for the Classic keys say so) */
+    uint8_t keys_classic;
 } emu_hal_t;
 extern emu_hal_t emu_hal;
 

@@ -7,6 +7,7 @@
 #   8 Reset Settings asked (OCT+ once)   9 after keys played: still asked, nothing reset   10 OCT-: the menu closed
 #   11 Calibrate with keys played: not started     12 .. 44 every entry, by SELECT alone (33 since 0.24)
 #   45 Secret Chords still Simple (no reset happened)   46 a take recorded from inside the menu   47 silent
+keys classic                  # (0.26: FM-1 is the default; this script was written for the Classic chord keys)
 wait 500
 btn GLO 80
 wait 300

@@ -138,6 +138,12 @@ void emu_fw_init(int demo)
         cho_mono = c && !strcmp(c, "mono");
     }
     cr_settings_boot();                           /* .. and the settings record (Felucca's fields + ChoralRoot's) */
+    if (emu_hal.keys_classic && crs_last_rc == 0) {   /* the script's "keys classic" on a unit with no record: the
+                                                    * defaults with Chord Keys Classic, as if chosen in the Options and
+                                                    * saved (no write here: flash still holds no record) */
+        crs_rec.cr.sticky = (uint8_t)(crs_rec.cr.sticky & ~CRS_LAYOUT_FM1);
+        cr_settings_seal(&crs_rec.cr);
+    }
     crs_ahead_boot();                             /* .. and the spare copies erased ahead (cr_shim.c persist_boot) */
     {   /* the MASTER pot at power-on: EMU_MASTER=ADC (0..1023), else where a caller put it, else 724 (-> master_q12
          * 2047, felucca_init's default); main.c reads it before the audio starts (master_boot) */
@@ -770,11 +776,14 @@ void emu_fw_dump(void)
                (unsigned)cs.names_std, cr_chord_names(), (unsigned)CRS_NAMES(&t));
         printf("  sixth: up %u (Options > 6th with 7th; the engine's %u; the record's bit %u)\n",
                (unsigned)cs.sixth_up, (unsigned)cr.sixth_up, (unsigned)CRS_SIXTH(&t));
+        printf("  keys-record: fm1 %u moved %u saved-fm1 %u saved-moved %u (Options > Chord Keys in the record: bit 1 of "
+               "sticky; 0.26's move to FM-1: bit 1 of leds)\n", CRS_LAYOUT(&t), (unsigned)((t.leds & CRS_KEYS_MOVED) != 0u),
+               CRS_LAYOUT(&crs_rec.cr), (unsigned)((crs_rec.cr.leds & CRS_KEYS_MOVED) != 0u));
         printf("  clean: look-ahead %u samples, the limiter's gain %d of 32768\n", (unsigned)CLN_LA, (int)cln_g);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
                "view %u chord-sound %04X slot %u pending %u  panel %08X\n",
                (unsigned)t.check, (unsigned)crs_rec.cr.check, (unsigned)t.playstyle, (unsigned)t.extadd, (unsigned)t.key_on,
-               (unsigned)t.motion, (unsigned)t.leds, (unsigned)settings_hold, (unsigned)CRS_DUALCORE(&t),
+               (unsigned)t.motion, CRS_LEDS(&t), (unsigned)settings_hold, (unsigned)CRS_DUALCORE(&t),
                (unsigned)t.usb_in, (unsigned)t.usb_level, (unsigned)t.view, (unsigned)t.chord_sound, (unsigned)t.loop_slot,
                (unsigned)crs_pending, h);
     }
