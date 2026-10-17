@@ -5631,3 +5631,22 @@ tests/releases_test.py` ALL OK with all 26 listed packages (`tools/fetch_package
 `tests/site_test.py` site ALL OK ("make_site.py --require-all builds the site for 0.24"). Merged into main
 (fast-forward) and tagged v0.24 here; release.yml builds the packages and pages.yml publishes the site. No SMK-37
 build of 0.24 (the owner did not ask for one).
+
+3y166. **0.24 on the unit (2026-10-16, evening; the flash-024 session).** The owner: "v0.24 should be up and tagged,
+please flash to my FM-1". The package from the GitHub release v0.24 itself (curl into a new folder
+`build/flash-0.24/`): `choralroot-0.24.fwsc` 610 313 B, sha256
+c7c26624026d912d827764b19fb91f12af91b69a2e623d7900ae65bcb447b25b, the same as 3y165's build and `web/releases.json`.
+Before: no other session on the unit (the linked sessions idle, no `fm1_install.py`, `uac_check.py` or `perf_unit.py`
+running; Ableton Live was open, not driving the unit), the Mac on AC power and kept awake (`caffeinate -dimsu`), the
+FM-1 on the Mac's USB (the tool cannot read its battery). `python3 tools/fm1_install.py --info`: one FM-1, `FM-1_920
+[running] port: ChoralRoot FM-1 version: ChoralRoot 0.24`, unit ID 5BD75BE3 (no "-beta3": by 3y164 the chord
+layouts' development build the owner played, not 3y157's 0.24-beta3). A full backup first:
+`fm1-backups/fm1-backup-2026-10-17-before-0.24.json` (in
+`/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/fm1-backups/`, 69 561 B): settings, the legacy banks, user sounds
+001..128 in 13 groups, the favourites, the ten loop slots' objects (slot 1 recorded): the same 34 objects as 3y157's
+backup, and every sound group, the favourites and loop slot 1 with 3y157's CRCs (only the settings differ). Flashed:
+`caffeinate -dimsu python3 tools/fm1_install.py build/flash-0.24/choralroot-0.24.fwsc --unit 5BD75BE3 --yes`: "done:
+the FM-1 runs FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". After: `--info` `FM-1_920 [running]
+port: ChoralRoot FM-1 version: ChoralRoot 0.24`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.24
+(86 hold a sound), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0,
+boot stub v3 "booted the app after 64.0 ms; marker ok". Not pushed.
