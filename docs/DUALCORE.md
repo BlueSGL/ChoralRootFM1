@@ -109,8 +109,8 @@ XIP 429140 B of 581564 (73.8%), RAM 84176 B of 98304 (85.6%), POOL 327000 B of 3
 
 Added: RAMTEXT 60 B (`.c1_text`); RAM ~3.9 KB (core 1's stacks 2816 + 256 B, FM6's second scratch 384 B, the
 matrix per part ~150 B, `cr_dbg` ~200 B, the job's state); POOL 256 B (the bass part's block and stereo side,
-`c1_buf` / `c1_side`); XIP ~3 KB. 3y46 added `p5x_buf` (128 B of POOL) and the list; 3y177 `p5x_side` (128 B of POOL)
-and 416 B of XIP.
+`c1_buf` / `c1_side`); XIP ~3 KB. 3y46 added `p5x_buf` (128 B of POOL) and the list; 3y177 `p5x_side` (128 B of POOL),
+424 B of XIP and, with `CR_RAM_VA` on, 9048 B of RAMTEXT (16 120 of 24 576).
 
 ## The job protocol (`fx.c mix_parts_split`, `cr_cpu1.h`)
 
@@ -227,10 +227,11 @@ block of 3121 of 2902 (108 %, 26 voices shed in 20 s), while core 1 waited after
 - **Core 1's stack**: `c1_part1_job` (68 B) -> `va_render` (844 B) is shallower than the path a VA bass already took
   (`c1_part1_job` -> `track_render_x` 212 -> `va_render`), and than FM TONE's (`quad_render` 856 under
   `track_render_x`): nothing new for the 2816 B.
-- **The flash**: with both cores running `va_render` from XIP they share the cache. `CR_RAM_VA=1 ./build.sh` puts it
-  in RAMTEXT (16 120 of 24 576 with it; `ram_code.py cmp`: 4 moved, 0 differ, veneers `memset` and, since GRAIN shares
-  the filter's weights, `va_fweights`, which the switch had lacked and failed to link without). The owner's package
-  pair measures both (HISTORY 3y177).
+- **The flash**: with both cores running `va_render` from XIP they share the cache. `CR_RAM_VA` puts it in RAMTEXT
+  (16 120 of 24 576 with it; `ram_code.py cmp`: 4 moved, 0 differ, veneers `memset` and, since GRAIN shares the
+  filter's weights, `va_fweights`, which the switch had lacked and failed to link without), **on in a device build
+  since 3y177**: on the unit the split alone took MORPH PAD's worst half from 3263 to 2389 us, and the VA in RAM to
+  2103, with no late half and no shed dry or recording (docs/VA.md "Two cores").
 
 Proof on the host: `tests/cr_c1_thread_test.c` (inline = thread = unsplit = all to core 1 = none to core 1, every
 sample, for six VA-chord pairs: a VA, P5, FM6, CZ-1 bass, MORPH PAD over PUNCH BASS with its SPREAD side on core 1,

@@ -273,7 +273,7 @@ Device estimate = host instructions / 100 x 1.7 % of the 2.9 ms half (docs/INTEG
   ./build.sh` links `va_render` (8406 B: the oscillators and the filter are inlined in it), `va_morph`,
   `va_render_mono` and `memset` at RAM instead of flash, the same instructions (docs/FX.md "Code in RAM", package
   F): what executing from the flash costs a VA chord is `pk_part0_us` on F against A. `SINE` and `TANH_Q15`, which it
-  reads every sample, stay in flash. Not measured. Since GRAIN shares the filter's type weights (3y118) `va_fweights`
+  reads every sample, stay in flash. **On by default since 3y177** (measured: below, "Two cores"). Since GRAIN shares the filter's type weights (3y118) `va_fweights`
   is no longer inlined into `va_render`, and the switch failed to link ("relocation truncated to fit") until 3y177
   gave it a veneer (`cr_ram.c`): 5 functions, 9046 B, `ram_code.py cmp` 0 functions differ.
 - `tests/target_budget.txt`: `va_render` (now the stereo body, `render2`; `va_render_mono` is `render`'s wrapper),
@@ -307,7 +307,22 @@ frame is 844 B, under core 1's 2816 B with `c1_part1_job`'s 68 (a VA bass went d
 `track_render_x`).
 
 A voice given up for another note (stage 4) renders its fade as a whole voice and is shared out like the others; a
-voice that ended (`va_done`) returns at once. The flash: `CR_RAM_VA=1` keeps both cores' VA code off XIP (above).
+voice that ended (`va_done`) returns at once. The flash: `CR_RAM_VA` (on in a device build since 3y177) keeps both
+cores' VA code off XIP (above).
+
+**On the unit** (5BD75BE3, 2026-10-17, `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us of the 2902 us half;
+shed: its rise in the run):
+
+| va: MORPH PAD + PUNCH BASS | block | part0 | part1 | wait | c0busy | c1busy | late | shed |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before (13b0adb), dry | 3263 | 2385 | 365 | 176 | 3319 | 706 | 32 | +30 |
+| the split, VA from flash, dry | 2389 | 1498 | 1342 | 266 | 2339 | 1650 | 0 | 0 |
+| the split, `CR_RAM_VA`, dry | **2103** | 1289 | 1159 | 229 | 2040 | 1454 | 0 | 0 |
+| before, recording | 3384 | 2509 | 387 | 221 | 3527 | 717 | 51 | +50 |
+| the split, VA from flash, recording | 2574 | 1593 | 1318 | 278 | 2633 | 1640 | 1 | +20 |
+| the split, `CR_RAM_VA`, recording | **2287** | 1389 | 1159 | 243 | 2270 | 1449 | 0 | 0 |
+
+The pad is 72 % of the half at its worst (was 112 %): no late half, no shed, dry or recording. A 6-note chord: 2098.
 
 Proof: `tests/cr_c1_thread_test.c` (inline = thread = unsplit = every voice on core 1 = none, six VA-chord pairs, a
 UNISON chord with USPREAD and MORPH PAD's SPREAD among them; ThreadSanitizer clean), test_cr.sh `cr_va_eight`.

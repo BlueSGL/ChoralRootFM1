@@ -5905,7 +5905,7 @@ flashed 09:08 UTC; this session, 09:13 .. 09:16 UTC, the same command, shed cumu
 3384, part0 2509, part1 387, wait 221, t5 451, late 51, shed +50, c0busy 3527 / c1busy 717; fm6 block 2936, part0
 1870, part1 636, wait 228, late 12, shed +30, c0busy 3060 / c1busy 999. Then a backup,
 `fm1-backups/fm1-backup-2026-10-17-before-va-split.json` (69 593 B); the install of package A was refused by this
-session's permission rules, so A and B are not on the unit and the unit stays on 13b0adb. `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
+session's permission rules (the flash-025 session installed A and B, below). `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
 (`VA_VOICE_US` 280, the unit's row / 8), 0 for the rest; `fx.c mix_parts_split` splits the chord part when its engine
 has it (was `P5_IS(t0)`). The protocol is 3y46's, unchanged: core 0 prepares every voice before the ONE hand-over
 (`voice.c track_render_x`, the `p5x` list), `c1_part1_job` renders the bass part and then core 1's share, now through
@@ -5948,6 +5948,53 @@ the 0.25 before: 2397 / 8 = 300 us a voice): part0 about 1300 .. 1500, part1 abo
 1650 (the bass and four voices: core 1 the longer side), the block about 2450 .. 2650 instead of 3256 (84 .. 91 %), no
 shed dry; fm6 unchanged (the control: FM6 is not split yet, and its dry shed is the next step's case). Next: FM6's chord (a third
 `fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.
+
+**On the unit, A and B (2026-10-17, 09:20 .. 09:45 UTC; the flash-025 session, the owner: "Yes: flash package A,
+measure, then B, measure, then back to 13b0adb, through your flash session (backup first, --unit 5BD75BE3)").** A
+(1d3edce1...a95c81) and B (7145de4e...754d68) as built here, sums exact; a backup first
+(`fm1-backups/fm1-backup-2026-10-17-before-va-split-flash.json`, 69 593 B, the same 34 objects as this session's;
+the backup after the run identical too); the installer's restart between flashes (no power-cycle), one `--debug` to
+clear the peaks. `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us of 2902, shed its rise in the run:
+
+| | block | part0 | part1 | wait | c0busy | c1busy | late | shed |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| va, 13b0adb, dry | 3263 | 2385 | 365 | 176 | 3319 | 706 | 32 | +30 |
+| va, A, dry | 2389 | 1498 | 1342 | 266 | 2339 | 1650 | 0 | 0 |
+| va, B, dry | **2103** | 1289 | 1159 | 229 | 2040 | 1454 | 0 | 0 |
+| va, 13b0adb, recording | 3384 | 2509 | 387 | 221 | 3527 | 717 | 51 | +50 |
+| va, A, recording | 2574 | 1593 | 1318 | 278 | 2633 | 1640 | 1 | +20 |
+| va, B, recording | **2287** | 1389 | 1159 | 243 | 2270 | 1449 | 0 | 0 |
+| va 6 notes, A / B, dry | 2482 / 2098 | 1500 / 1284 | 1335 / 1158 | 271 / 233 | 2421 / 2015 | 1658 / 1435 | 0 / 0 | 0 / 0 |
+| fm6, 13b0adb, dry | 2719 | 1722 | 596 | 186 | 2729 | 938 | 3 | +10 |
+| fm6, A, dry | 2656 | 1699 | 576 | 171 | 2664 | 903 | 0 | 0 |
+| fm6, B, dry | 2468 | 1524 | 249 | 161 | 2466 | 553 | 0 | 0 |
+| fm6, 13b0adb, recording | 2936 | 1870 | 636 | 228 | 3060 | 999 | 12 | +30 |
+| fm6, A, recording | 2917 | 1859 | 632 | 209 | 3016 | 990 | 10 | +31 |
+| fm6, B, recording | **2565** | 1627 | 257 | 185 | 2638 | 568 | 0 | 0 |
+
+(A's first dry run, with the main checkout's older perf_unit.py and no cores table: va 2514 / 1497 / 1341, wait
+278, late 0; fm6 2733 / 1716 / 577, late 1; no shed.) `--debug` after each flash and after each package's runs, and
+after the flash back: c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0, pk_late 0. Back on 13b0adb: `FM-1_920
+[running] ... ChoralRoot 0.25.1`, package 77520d3218722f988aa271e2c6b24e77d8ffa5374516d2d916be97f7e7570c4a, `--sounds`
+128 slots, 84 used. What it says: the split took the VA pad's worst half from 112 % to 82 % of the half (A), and the
+VA in RAM to 72 % (B), with no late half and no shed dry or recording; the flash was the VA's cost, on both cores
+(the VA bass under FM6 on core 1: part1 576 -> 249). FM6 is still core 0's alone (part0 1524 .. 1627) and was the
+next step; under B it no longer sheds either.
+
+**B is the candidate: `CR_RAM_VA` on in a device build** (`tools/build.py RAM_DEFAULT_ON`, as `P5_RAM`;
+`CR_RAM_VA=0 ./build.sh` is A, byte for byte; the default build is B, byte for byte). Size: XIP 543 252 B of 573 440
+(94.7 %), RAMTEXT 16 120 of 24 576 (8456 B left: `CR_RAM_FM6`'s 6234 would fit beside it, `CR_RAM_CZ`'s 16 390 or
+`CR_RAM_CORE` + `CR_RAM_FX` would not), RAM 80 544 B of 98 304 (81.9 %), POOL 308 636 of 344 064 (89.7 %). The
+single-core package (`CR_SINGLE_CORE=1`) builds: XIP 540 256 (94.2 %), RAMTEXT 16 120, RAM 77 420, POOL 308 508. The
+SMK-37 (`BOARD=smk37`) builds: XIP 541 996 (94.5 %), RAMTEXT 16 260, RAM 81 340, POOL 308 636. **Bit-exact**: the host
+never sees `CR_RAM_VA` (`ram_code.py cmp`: every function instruction for instruction the same, 4 moved). The golden
+renders (`tests/regress.c`, 317) are one core's (`CR_CPU1 0`): unchanged. Built with `CR_CPU1=1` and core 1 alive
+(`cr_dbg.c1 = C1_OK`; a scratch wrapper, `build/scratch/va-split/goldens_c1.sh`), the 317 renders with the chord
+voices shared out are those with `cr_c1_test_nosplit`, every one; and that two-core set is 13b0adb's, every one (101
+of them differ from the one-core goldens, on 13b0adb as here: the two cores' voice rules, not the split). **For the
+players** (a release-note line): "Dual Core plays a VA chord on both cores now, and the VA's sound code runs from
+RAM: an 8-note MORPH PAD over a VA bass that used to run late and drop voices now uses about 72 % of the time it has (79 %
+while recording over USB), and FM6 chords over a VA bass gain too; the sound is the same, bit for bit."
 
 ## 2026-10-17 (MOD's background black)
 
