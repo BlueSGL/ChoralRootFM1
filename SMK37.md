@@ -19,14 +19,15 @@ factory package afterwards. The test packages (`build/release-smk37/`, see [Buil
 
 | Model | Package | Identity |
 | --- | --- | --- |
-| SMK-37 Pro (and the Starrykey 37 Play) | `choralroot-0.24-beta3-smk37.fwsc` | `SMK-37 Pro_920` |
-| SMK-37 Elite | `choralroot-0.24-beta3-smk37-elite.fwsc` | `SMK-37 Elite_920` |
-| MKE-P37 | `choralroot-0.24-beta3-smk37-mke.fwsc` | `MKE-P37_920` |
+| SMK-37 Pro (and the Starrykey 37 Play) | `choralroot-0.24-beta3-smk37.1.fwsc` | `SMK-37 Pro_920` |
+| SMK-37 Elite | `choralroot-0.24-beta3-smk37.1-elite.fwsc` | `SMK-37 Elite_920` |
+| MKE-P37 | `choralroot-0.24-beta3-smk37.1-mke.fwsc` | `MKE-P37_920` |
 
-Each has a `-1core` twin (`choralroot-0.24-beta3-smk37-1core.fwsc`, ...): the same firmware on one processor core, for
+Each has a `-1core` twin (`choralroot-0.24-beta3-smk37.1-1core.fwsc`, ...): the same firmware on one processor core, for
 a unit that crashes or freezes with the standard package (as the FM-1's, [docs/DUALCORE.md](docs/DUALCORE.md)). The
-version a player sees (the splash, Options > Version, `fm1_install.py --info`) is `ChoralRoot 0.24-beta3-smk37`
-(`... 1-core` for the twin).
+version a player sees (the splash, Options > Version, `fm1_install.py --info`) is `ChoralRoot 0.24-beta3-smk37.1`
+(`... 1-core` for the twin; Options > Version cuts its end off there). 0.24-beta3-smk37.1 is 0.24-beta3-smk37 with
+genkigenki's fix for the stock firmware's mapping (below, "If every key sends the same note after going back").
 
 ## Controls
 
@@ -105,7 +106,7 @@ freezes with the standard package.
 **From the command line**: connect the keyboard by USB and run, with the package for your model:
 
 ```sh
-python3 tools/fm1_install.py choralroot-0.24-beta3-smk37.fwsc
+python3 tools/fm1_install.py choralroot-0.24-beta3-smk37.1.fwsc
 ```
 
 `fm1_install.py` needs `python-rtmidi` (`pip3 install python-rtmidi`). It checks that the package is for the connected
@@ -221,9 +222,9 @@ models in `build/release-smk37/`, with the `-1core` twins, `SHA256SUMS`, this fi
 [BUILDING.md](BUILDING.md) "An SMK-37 test release"):
 
 ```sh
-BOARD=smk37 ./build.sh --release 0.24-beta3-smk37
-BOARD=smk37 MODEL=elite ./build.sh --release 0.24-beta3-smk37
-BOARD=smk37 MODEL=mke ./build.sh --release 0.24-beta3-smk37
+BOARD=smk37 ./build.sh --release 0.24-beta3-smk37.1
+BOARD=smk37 MODEL=elite ./build.sh --release 0.24-beta3-smk37.1
+BOARD=smk37 MODEL=mke ./build.sh --release 0.24-beta3-smk37.1
 ```
 
 ## What to test
@@ -231,7 +232,7 @@ BOARD=smk37 MODEL=mke ./build.sh --release 0.24-beta3-smk37
 What no test here can answer, in the order to try it. Note the model, the package and what you saw.
 
 1. **First boot and the owner change.** From the stock firmware: the first start takes a few seconds longer (the
-   areas cleared, once), then the splash shows `ChoralRoot 0.24-beta3-smk37`. A second start is quick. `fm1_install.py
+   areas cleared, once), then the splash shows `ChoralRoot 0.24-beta3-smk37.1`. A second start is quick. `fm1_install.py
    --info` names the firmware. From genkigenki's earlier build: your sounds are there (moved into the pool).
 2. **The pads.** Pads 1-4, 9-12 hold the chord types and extensions, pad 13 is LOCK (tap and hold), pads 5-8 and 14-16
    pick and stop the performance modes; their colours as in [Controls](#controls).

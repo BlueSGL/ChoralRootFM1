@@ -305,6 +305,8 @@ the FM-1 version they are built from with `-smk37` after it (`0.24-beta2-smk37`)
 (never `web/releases.json`), the page the SMK-37 test installer at
 <https://quixotic7.github.io/ChoralRootFM1/webapp/smk37/> (`web/smk37.html`), which no page of the site links: the
 link goes to the testers who accept the risk.
+A respin of the SMK build on the same FM-1 base adds `.N` after `-smk37` (`0.24-beta3-smk37.1`, tag
+`v0.24-beta3-smk37.1`): the same steps, its own entry, its `base` the same FM-1 version.
 
 1. Build the three models locally, twice, and compare `build/release-smk37/SHA256SUMS`:
    `BOARD=smk37 ./build.sh --release X.Y-smk37`, then `MODEL=elite`, then `MODEL=mke` (six packages, their apps,

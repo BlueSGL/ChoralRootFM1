@@ -5466,3 +5466,19 @@ counted as the base's). Checked: `./build.sh --release 0.24-beta3` gives v0.24-b
 `BOARD=smk37 [MODEL=elite|mke] ./build.sh`: XIP 538 484 / 538 500 / 538 484 B of 573 440, RAM 80 940, POOL 306 196;
 smk_flash_test (21 checks) and smk_owner_test (22) pass; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23
 suites); `./build.sh` last (5f1102a1..., main's). Not pushed, not tagged; no release packages built.
+
+3y162. **0.24-beta3-smk37.1, the respin with the stock mapping's fix (2026-10-16; the owner: "Yes: build the three SMK
+models as 0.24-beta3-smk37.1 (twice, matching sums), add its releases-smk37.json entry, then tag v0.24-beta3-smk37.1
+and publish"; branch claude/smk37-beta3-1 on origin/main cd8358b; the tag and the push are the orchestrator's).**
+`BOARD=smk37 [MODEL=elite|mke] ./build.sh --release 0.24-beta3-smk37.1` twice, the same SHA256SUMS
+(build/release-smk37/): Pro `choralroot-0.24-beta3-smk37.1.fwsc` 7e294c28..6ed1, `-1core` 1cf0c16f..e7b; Elite `-elite`
+e2903f29..1a5b, `-elite-1core` 03863a71..9863; MKE-P37 `-mke` 7873dac3..3817, `-mke-1core` deed7529..8c13. The apps
+carry "ChoralRoot 0.24-beta3-smk37.1" ("... 1-core": 36 characters, INFO's 40 hold it, Options > Version cuts its
+end). Size: Pro and MKE-P37 XIP 538 516 B of 573 440 (93.9 %), Elite 538 532; RAM 80 940, POOL 306 196; the 1-core
+packages XIP 535 088. web/releases-smk37.json: 0.24-beta3-smk37.1 first (base 0.24-beta3, tag v0.24-beta3-smk37.1, the
+fix in four bullets, three notes: community-tested; updating keeps everything, a pool sector may move; going back).
+SMK37.md: the packages, the version a player sees, the install command, the release commands and What to test name
+0.24-beta3-smk37.1. BUILDING.md: the .N respin. Checked: `python3 tests/releases_test.py` ALL OK (the entry, its
+six packages' sha256s against build/release-smk37); run_tests' SMK hooks (smk_flash_test, smk_owner_test, the package
+tests) green; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23 suites, 90 s); `./build.sh` last (the FM-1
+package 5f1102a1..., main's). Not tagged, not pushed (the orchestrator tags v0.24-beta3-smk37.1 and pushes main).
