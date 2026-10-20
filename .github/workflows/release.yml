@@ -46,10 +46,12 @@ defaults:
     shell: bash
 
 env:
-  # the shared workflow the hub trusts, at refs/tags/v1, and the commit v1 names (2026-10-18, its CHANGELOG):
-  # publish refuses a package signed by any other commit of it (a moved tag)
+  # the shared workflow the hub trusts, at refs/tags/v1, and v1's digest as the attestation records it (the
+  # certificate's Build Signer Digest): v1 is an annotated tag, so this is the tag object 5ba8c359.., which names
+  # the commit 85a003ab.. (2026-10-18, its CHANGELOG), not that commit (HISTORY 3y191). publish refuses a package
+  # signed by any other v1 (a moved or re-made tag)
   FM1_BUILD: zvenson/fm1-build/.github/workflows/build.yml
-  FM1_BUILD_V1_SHA: 85a003ab455b1c074b0bd6d7c282c096a464b973
+  FM1_BUILD_V1_SHA: 5ba8c359b1744cc53c4530b15eff52d0d5c1255b
 
 jobs:
   draft:

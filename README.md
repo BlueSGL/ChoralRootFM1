@@ -139,6 +139,9 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.26.1** ([docs/releases/0.26.1.md](docs/releases/0.26.1.md)): 0.26's firmware, the first release GitHub
+  built from source and signed through The Firmware Hub's shared workflow (`gh attestation verify`, BUILDING.md
+  "Checking a package").
 - **New in 0.26** ([docs/releases/0.26.md](docs/releases/0.26.md)): with Dual Core On, VA and FM6 chords are shared
   between the two cores and the VA's code runs from RAM: an 8-note VA pad over a bass no longer runs late, the same
   sound bit for bit; the screen's background is pure black; the installers recognise Bubba Machine.

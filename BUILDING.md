@@ -276,8 +276,8 @@ the installer with the one in `web/releases.json`).
    signed); the workflow then signs a build attestation for `choralroot-X.Y.fwsc`, `choralroot-X.Y-app.bin`,
    `choralroot-X.Y-1core.fwsc` and `choralroot-X.Y-1core-app.bin` and uploads them with its `SHA256SUMS` into the
    draft. **publish**: downloads the draft's files and checks `SHA256SUMS`, each file's attestation (signed by
-   fm1-build at the commit its `v1` named when it was reviewed, `FM1_BUILD_V1_SHA` in release.yml, for this tag
-   and commit) and `web/releases.json` again, then publishes the release (a full release, 0.x too since 0.22; a
+   fm1-build's `v1` as it was reviewed, `FM1_BUILD_V1_SHA` in release.yml: the annotated tag's own SHA, which
+   the attestation records as its signer digest, not the commit's; for this tag and commit) and `web/releases.json` again, then publishes the release (a full release, 0.x too since 0.22; a
    pre-release for `X.Y-suffix`). A failure in any job leaves a draft nobody sees: re-run the failed jobs, or
    delete the draft (and the tag, to release another commit) on the Releases page. Run from the Actions tab (Run
    workflow, with a version) it only builds and signs, and the packages are the run's artifact `packages`.

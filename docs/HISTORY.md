@@ -6296,3 +6296,50 @@ f8f840fc..; "web/releases-smk37.json: 0.26-smk37's 6 sha256s match"), both relea
 line; `python3 tests/releases_test.py` ALL OK; `CR_VERSION=0.26 sh tests/run_all.sh` ALL SUITES PASSED (23 suites;
 test_cr 1098 ok, test_persist 119; 317 golden renders, 0 changed; 0 lint); `./build.sh`: XIP 544 196 B of 573 440
 (94.9 %), RAM 80 544, POOL 308 636; `python3 tests/site_test.py` ALL OK. Not pushed. No device.
+
+## 2026-10-20 (0.26.1, the first signed release)
+
+3y191. **0.26.1, the release tree: the first release built and signed by The Firmware Hub's shared workflow (the
+owner: "Tag a release so it goes out signed"; the orchestrator's number, v0.26.1: no firmware change since 0.26, so
+0.26's firmware with the version bumped; FM-1 only, the SMK-37 build stays v0.26-smk37, nothing changed for it).**
+From origin/main fb3c6fd (v0.26 with hub signing, 3y190). Between 6412d05 (v0.26) and this tree the firmware's source
+differs in `FELUCCA_VERSION` alone ("ChoralRoot 0.26.1"); `tools/build.py`, `build.sh` and `tools/sdk` are unchanged.
+`docs/releases/0.26.1.md` for players: the summary paragraph (0.26's firmware, built from source on GitHub and signed;
+nothing else changes); Signed builds; Checking a package (`gh attestation verify`, from BUILDING.md); Installing;
+"Going back to 0.26": nothing changes but the version line, and 0.26's packages have no attestation. README's "New in
+0.26.1"; the manual's first line. `web/releases.json`: 0.26.1 first, stable, dated 2026-10-20, sha256
+f118c4e7efc500d7dcf69df1685960b417870865c9a327aed9ec5443eeae8db1, 1-core
+7fec6a729c2d05d1f19e8b6ab3e2101affb8d9b11e4835cb412b11625289ace2 (610 313 B each; apps 688eb277.. and ce4ead0e..),
+four bullets (releases_test asks 4 to 12 of an FM-1 entry); 0.26's going-back note (nothing changes; its version
+line; no attestation). `web/releases-smk37.json` unchanged: 0.26-smk37 first on base 0.26, which is still a version
+of `web/releases.json` (releases_test's check is `base in versions` and `version.startswith(base + "-")`; the site
+offers the SMK list on its own), so an X.Y.Z FM-1 release first needs no change there. **Built** with
+`tools/hub_build.sh 0.26.1`, the hub's command (Python 3.11.6, Pillow 11.1.0 with Raqm 0.10.1 / FriBiDi 1.0.17,
+fontTools 4.66.1; the toolchain in Docker), twice, the first `build/release-0.26.1` moved aside: the same `SHA256SUMS`;
+`hub_build.sh --check build/release-0.26.1 0.26.1` (also as a tag, `GITHUB_REF_TYPE=tag`) "0.26.1's 2 sha256s match";
+the dev build `build/choralroot.fwsc` is the release package's bytes (f118c4e7..). Size as 0.26: XIP 544 196 B of
+573 440 (94.9 %), RAM 80 544, RAMTEXT 16 120, POOL 308 636; 1-core XIP 541 200, RAM 77 420.
+**release.yml's signer digest, corrected.** The dry run's artifact (run 39380902148, `0.26-hubtest`, downloaded) checked
+with publish's own command: `gh attestation verify` with `--signer-digest 85a003ab..` (`FM1_BUILD_V1_SHA`, v1's
+commit) **fails**: "expected BuildSignerDigest to be 85a003ab.., got 5ba8c359b1744cc53c4530b15eff52d0d5c1255b". v1 is
+an annotated tag: `git ls-remote` gives `refs/tags/v1` 5ba8c359.. (the tag object) and `refs/tags/v1^{}` 85a003ab..
+(the commit, also main's HEAD), and the certificate records the tag object (Build Signer URI
+`zvenson/fm1-build/.github/workflows/build.yml@refs/tags/v1`, Build Signer Digest 5ba8c359..). The first tag's publish
+job would have stopped there, leaving the draft, and a re-run takes release.yml from the tag: a new tag would have been
+needed. `FM1_BUILD_V1_SHA` is now 5ba8c359.. (the pin is still v1 as reviewed: a moved or re-made v1 is another tag
+object), its comment and BUILDING.md "Releasing" say why; with it all four dry-run files pass publish's whole command
+(`--signer-workflow`, `--signer-digest`, `--source-ref refs/heads/hub-signing`, `--source-digest 12b0c40..`,
+`--deny-self-hosted-runners`; gh 2.102.0). Read again for a three-part version: `hub_build.sh --version` gives
+version=0.26.1, board=fm1; the draft's first-entry check, release body (simulated: docs/releases/0.26.1.md, `---`, the
+install text with 0.26.1 in each name), `prerelease` false (no `-`), publish's `--check signed 0.26.1` and the pages
+dispatch (pages.yml takes `X.Y.Z`; v0.25.1 went that way) all take it. fm1-build's softprops v2.3.2 finds our draft
+(`findTagFromReleases` walks every release, drafts too) and keeps its draft flag, name and body.
+**Checked**: `CR_VERSION=0.26.1 sh tests/run_all.sh` ALL SUITES PASSED (23 suites, 123 s; test_cr 1098 ok,
+test_persist 119; 317 golden renders, 0 changed; 0 lint; the browser emulators built, `test_web_emu.mjs` and
+`test_web_emu_smk.mjs` PASS); site_test in it site ALL OK ("New in 0.26.1" with every bullet, "make_site.py
+--require-all builds the site for 0.26.1"). `python3 tests/releases_test.py` with the 34 FM-1 packages
+(`build/scratch/packages`: 0.26's tree's 32 and 0.26.1's two) and the 30 SMK ones (`CR_SMK_PACKAGES_DIR`): releases
+ALL OK, 64 sha256s compared, none skipped. `web/make_site.py build/choralroot.fwsc 0.26.1 build/scratch/site-full
+--packages build/scratch/packages --smk-packages .. --require-all`: the landing page says New in 0.26.1,
+`webapp/smk37/` offers 0.26-smk37 first; no FM-1 page links it. Not pushed, not tagged (the orchestrator pushes main
+and tags v0.26.1). No device.
