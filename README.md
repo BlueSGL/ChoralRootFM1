@@ -139,6 +139,9 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.26** ([docs/releases/0.26.md](docs/releases/0.26.md)): with Dual Core On, VA and FM6 chords are shared
+  between the two cores and the VA's code runs from RAM: an 8-note VA pad over a bass no longer runs late, the same
+  sound bit for bit; the screen's background is pure black; the installers recognise Bubba Machine.
 - **New in 0.25.1** ([docs/releases/0.25.1.md](docs/releases/0.25.1.md)): the FM-1 chord keys are the default
   (SUS = G#3 + A#3, the 9 on B3, roots from C4, LOCK on LFO); every FM-1 switches to them once at the update, LOCK
   and the latched chord carried over; Classic is in Options > Chord Keys.

@@ -6150,3 +6150,51 @@ one before in object 58 alone), U033 DARK HAZE a GRAIN patch; `--debug` c1_state
 stub v3 "booted the app after 64.0 ms; marker ok"; `stale_halves` 5 at the first read (a peak since power-on, cleared
 by reading), 0 at the next, with `pk_late` 0 and the one erase since power-on done ahead, none into a sounding output.
 Not pushed.
+
+## 2026-10-19 (0.26 and 0.26-smk37, the release tree)
+
+3y189. **0.26 and 0.26-smk37, the release tree (the owner, after playing package C: "This is all good push and tag for
+release"; the orchestrator's numbers, v0.26 stable and the SMK-37 build v0.26-smk37).** From origin/main 13b0adb
+(0.25.1 with MOD's black background, 3y185), merged in this order with their authorship: claude/reverent-burnell-8b8084
+(4bc751d: the VA's chord voices on both cores and `CR_RAM_VA` on, 3y177; FM6's, 3y187), flash-blackbg (dc73d07: 13b0adb
+on the unit, numbered 3y186 there and **3y188** here, after the split's 3y187, since 3y186 is also
+claude/hub-signing-4b7cd3's, which is not part of this release) and claude/bubba-classify (e495f4c: the installers
+recognise Bubba Machine, **3y176**, a number 3y175's tree left free: kept, its entry under its own 2026-10-17 heading
+before 3y177). The merges conflicted in this file only. **The firmware is package C**: `./build.sh` on the merged tree
+before the version bump gave 213076576bff30681d6a971d74dfe84dd036b5a1c55bff4012c945758bad0d2b, 610 313 B, the
+package on the owner's unit since 3y187: 3y188 is a record and the Bubba fix is in `tools/fm1_install.py` and the web
+pages, no firmware byte. After the bump the tree's firmware differs from 4bc751d's in `FELUCCA_VERSION` alone.
+`docs/releases/0.26.md` for players: the summary paragraph first; VA and FM6 chords on both cores with the VA's code in
+RAM, the unit's numbers against 0.25.1 (13b0adb, 3y177's "before": MORPH PAD over PUNCH BASS 3263 / 3384 us of the
+2902 us half, 112 / 117 %, late and shed, now C's 2164 / 2198, 75 / 76 %; TINE EP over DEEP SUB 2719 / 2936, 94 /
+101 %, now 2012 / 2124, 69 / 73 %), the same sound bit for bit, CZ-1 and GRAIN not shared; the black background;
+Bubba Machine (what the player meets: the refusal at once, also with the override, and the way back to V15); Installing
+(the SMK-37's 0.26-smk37); "Going back to 0.25.1": nothing to say about data, since nothing of the stored format
+changed (between 15ca8d0 and this tree the firmware changes are `audio.c`, `core.h`, `cr_cpu1.h`, `cr_ram.c`,
+`eng_fm6.c`, `eng_va.c`, `fx.c`, `voice.c`, `cr_draw.c` and the palette generator: no settings, store, backup or
+flash-layout code), only the one-core VA / FM6 render and the grey background there. `FELUCCA_VERSION` "ChoralRoot
+0.26"; README's "New in 0.26"; the manual's first line; SMK37.md's version (0.26-smk37, the packages, the commands, the
+splash). `web/releases.json`: 0.26 first, stable, dated 2026-10-19, sha256
+685077ff4fc2640c0c934be345134fcd05c8d64914a1d3706d1183351f924382, 1-core
+ad5401c29e9083d18964a3226cf668e1fe5d32270187ded5fdc287083e2cecf3 (610 313 B each), six bullets; 0.25.1's going-back
+note (everything stays; one core and the grey there). `web/releases-smk37.json`: 0.26-smk37 first on base 0.26, Pro
+143660c3158f6fdee26c058c6bab9329f5a50a38d94453447332cd7a773df0ce / 1-core
+f8f840fc1ddf7210b0a02545327f3a54050f663b6b3fc618deea3334d85ef249 (651 496 B), Elite
+c8403cced2270e615f1910c630dd053e0dd9add3174275c181fdee1a02460a0c /
+b73e9a8abd37f38426e30de43fefad84bf3a20d4c6e76e246e6ad1cf0abdfc36 (651 500 B), MKE
+0d1d53300e2106a6498fdfe55b7c31a58b1fe10c735252d9816ffa10078962be /
+807461f72bd4fe47a2b1408ce037fcbcd9e0a5fc33466dadfb0b743b44696fd6 (651 492 B). `./build.sh --release 0.26` twice and the
+three SMK models as 0.26-smk37 twice, the first folders moved aside: the same SHA256SUMS each time; the dev build of
+the tree is the release package's bytes (685077ff...). Size: XIP 544 196 B of 573 440 (94.9 %), RAM 80 544, RAMTEXT
+16 120 of 24 576, POOL 308 636 of 344 064; 1-core XIP 541 136, RAM 77 420; the SMK-37 XIP 542 924, RAMTEXT 16 260.
+**Checked**: `CR_VERSION=0.26 sh tests/run_all.sh` ALL SUITES PASSED (23 suites, 123 s; test_cr 1098 ok, test_persist
+119; 317 golden renders, 0 changed; 0 lint; the browser emulator built as 0.26 and the SMK-37's as 0.26-smk37,
+`test_web_emu.mjs` and `test_web_emu_smk.mjs` PASS). `CR_PACKAGES_DIR=build/release-0.26 python3
+tests/releases_test.py` releases ALL OK (both packages at their listed sha256s); with all 32 listed FM-1 packages
+(`build/scratch/packages`: 0.25.1's tree's 30 and 0.26's two) and the 30 SMK ones (`CR_SMK_PACKAGES_DIR`), ALL OK, 62
+sha256s compared, none skipped. site_test (in run_tests) site ALL OK ("make_site.py --require-all builds the site for
+0.26", "New in 0.26" with its bullets); `web/make_site.py build/choralroot.fwsc 0.26 build/scratch/site-full --packages
+build/scratch/packages --smk-packages build/scratch/smk-packages --require-all`: the landing page says New in 0.26,
+`webapp/smk37/` offers 0.26-smk37 first, then 0.25-smk37, 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37;
+no FM-1 page links it. Not pushed, not tagged (the orchestrator pushes main, tags v0.26, then v0.26-smk37 once the
+FM-1 release exists: pages.yml fails while web/releases-smk37.json names a release that does not exist yet). No device.
