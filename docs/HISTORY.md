@@ -6094,3 +6094,29 @@ recording (88 % -> 73 %), inside the estimate's 250 .. 550; core 1 now carries 8
 1023 .. 1138, so the split's 4 + 4 leaves core 0 the longer side by about 200 .. 300 (its fm6_block, the ghosts: the 1.07 and
 200 us weights could move one voice more, not tried). The VA rows are B's within run-to-run noise (B's own dry varied
 43 us between two runs): the VA path is unchanged. C is on the unit as the candidate (the orchestrator).
+
+## 2026-10-17 (0.25.1 with the black background on the unit)
+
+3y188. **13b0adb, 0.25.1 with MOD's black background, on the unit (2026-10-17, early morning; the flash-025 session;
+3y186 on its branch, dc73d07, renumbered at the 0.26 merge to stand after 3y187).**
+The owner: "Push 13b0adb to main and flash it on my FM-1 (backup first)." origin/main was 13b0adb already (nothing to
+push from here). Built in the main checkout at a detached 13b0adb (then back on the branch it was on):
+`build/choralroot.fwsc` 610 313 B, identity FM-1_920, sha256
+77520d3218722f988aa271e2c6b24e77d8ffa5374516d2d916be97f7e7570c4a, the same bytes as the black-bg worktree's build;
+copied to `build/flash-blackbg/choralroot-13b0adb.fwsc`. Before: `python3 tools/fm1_install.py --info` one FM-1,
+`FM-1_920 [running] port: ChoralRoot FM-1 version: ChoralRoot 0.25`, unit ID 5BD75BE3 (the 44e0c58 FM-1 chord keys
+build, flashed after 3y174; no version bump there). A full backup first:
+`fm1-backups/fm1-backup-2026-10-17-before-black-bg.json` (69 591 B, 34 objects): every object as in the backup before
+44e0c58 but the settings, whose record (v15, CRS1 at byte 572 of object 1) now holds `sticky` 0x07 (FM-1, LATCH) and
+`leds` 0x03 (Stock, and bit 1 `CRS_KEYS_MOVED`, 3y172's mark, written by a save since). Flashed: `caffeinate -dimsu
+python3 tools/fm1_install.py build/flash-blackbg/choralroot-13b0adb.fwsc --unit 5BD75BE3 --yes`: "done: the FM-1 runs
+FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". **Not alone on the unit:** the `pgrep` just before the
+flash listed an `fm1_install.py --midi-worker` of another session's worktree (`reverent-burnell-8b8084`); the command
+went on (the check printed, it did not stop it), and the worker was gone seconds after. After: `--info` `FM-1_920
+[running] port: ChoralRoot FM-1 version: ChoralRoot 0.25.1`, unit ID 5BD75BE3; `--sounds` all 128 slots read on
+ChoralRoot 0.25.1, 84 hold a sound (one more than the backup: U084 CLOUD PAD, GRAIN, over GRAIN 01 CLOUD PAD, written
+after the backup and not by the unit itself, "0 saves by the unit itself"; a backup after the flash differs from the
+one before in object 58 alone), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, boot
+stub v3 "booted the app after 64.0 ms; marker ok"; `stale_halves` 5 at the first read (a peak since power-on, cleared
+by reading), 0 at the next, with `pk_late` 0 and the one erase since power-on done ahead, none into a sounding output.
+Not pushed.
