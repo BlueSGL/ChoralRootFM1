@@ -5922,3 +5922,85 @@ moved by at most one RGB565 step per channel (an edge blended over the backgroun
 `./build.sh`: XIP 542 828 B of 573 440 (94.7 %), RAM 80 544, POOL 308 508, as 0.25.1 (a palette value and a named colour
 change, no code). Before / after of the chord view and the editor's OSC and FILTER pages (the manual's shots) in the
 sessions' notes folder, `black-bg-3y185/`. Not pushed. No device.
+
+## 2026-10-19 (signed releases: The Firmware Hub's shared build workflow)
+
+3y186. **Releases built and signed by The Firmware Hub's shared workflow (the owner: "thefirmwarehub now supports signing
+see https://thefirmwarehub.com/kb/#sign we should get this working with ChoralRoot").** The hub's knowledge base ("How to
+sign your release", "What the hub checks", "Built from source", "Getting your firmware listed", 2026-10-19): a card
+gets **Built from source on GitHub** when the package on the release has a GitHub artifact attestation signed by
+`zvenson/fm1-build/.github/workflows/build.yml` at `refs/tags/v1` (only that ref is trusted), from the project's own
+repository, for a release tag; the hub checks the signature, Sigstore's certificate and log, and that the attested
+SHA-256 is the file it serves, so a file rebuilt or uploaded by hand afterwards loses it. Its sync runs every three
+hours; a release that fails a check is not offered and the last good one stays. **The workflow** (v1 = commit
+`85a003ab455b1c074b0bd6d7c282c096a464b973`, 2026-10-18, "Tested with Shine On"; Melodee and PIGEON are signed by it,
+the catalogue's `provenance` says so): `workflow_call` with the inputs `build` (a bash command, `eval`ed in the
+repository root), `packages` (a glob), `test` (optional), `tests-block` (true) and `sdk` (true: a clone of
+`AC79NN_SDK_V1.2.1_2023-12-13` from gitee to `~/fw-AC79_AIoT_SDK`, `$AC79_SDK`); one job on `ubuntu-24.04`, every
+action pinned to a SHA: checkout v4.2.2, setup-python v5.6.0 with Python 3.12, `pip install Pillow` (unpinned, no
+fontTools), JieLi's toolchain from `https://pkgman.jieliapp.com/s/linux-toolchain` (as `tools/get_toolchain.sh`, no
+cache; `$JIELI_TOOLCHAIN`), our command natively (no Docker: build.sh and tools/build.py run the toolchain natively on
+Linux x86-64), `sha256sum` of the glob into its own `SHA256SUMS`, attest-build-provenance v2.4.0 over the glob,
+upload-artifact v4.6.2 (`packages`: the glob and `SHA256SUMS`), and on a tag softprops/action-gh-release v2.3.2 with
+the glob and `SHA256SUMS` and `generate_release_notes`. No name, body, draft or prerelease input: it creates a plain
+release, and on an existing one (a draft too: it finds the tag among all releases) it keeps the name, body, draft and
+pre-release flags and replaces only same-named assets. Any number of files: the glob decides. It has no outputs, but
+jobs after it in the calling workflow run (`needs:`) and can take its artifact. **Reproducible**: fm1-build differs
+from our CI in Python (3.12, not 3.11), Pillow (the newest, 13.0.0 today, not 11.1.0), fontTools (none, not 4.66.1),
+Raqm (no libfribidi) and the SDK (sdk: false keeps our vendored `tools/sdk`). Rebuilt v0.25.1 in `ubuntu:24.04`
+(linux/amd64, Docker on the Mac, the toolchain `20250324.1`): Python 3.12.3 with Pillow 11.1.0, fontTools 4.66.1 and
+Raqm gives **the release's four sha256s** (ef57eacc.., 1dcac28c.., 052a08af.., 2e4936ca..: the Python version makes no
+difference to ChoralRoot's packages, which hold no samples); Pillow 13.0.0 with fontTools 4.67.0 gives other packages
+(2aa692af.., 3512ce8b..); without libfribidi `gen_aa_font.py` fails (Raqm requested and missing). The toolchain:
+JieLi's link serves `jieli-linux-toolchains-20260730.1` (Last-Modified 2026-10-09) while the Mac has `20250324.1`;
+our CI's v0.25.1 run fetched it fresh (its cache entry was created in that run, the cache is per tag) and its packages
+are the sums the Mac built and `web/releases.json` lists, so the newer download makes the same bytes. **The change**:
+`tools/hub_build.sh` is the build command (also runs on the Mac: `tools/hub_build.sh X.Y`): on GitHub's runner it
+installs libfribidi0, libraqm0 and zip and pip-installs Pillow 11.1.0 and fontTools 4.66.1 over the workflow's Pillow,
+refuses other versions and a Pillow without Raqm, runs `./build.sh --release` (the three SMK models for X.Y-smk37),
+checks the files and `SHA256SUMS` as release.yml did, checks the packages' sha256s against `web/releases.json` (both;
+on a tag of a site-publishing version an unlisted version is an error) or `web/releases-smk37.json` (six, when listed),
+so a package that is not the pinned one is never signed, and copies the packages and apps to the repository root
+(`choralroot-*`: the workflow's `SHA256SUMS` then names them as ours does, four lines, or twelve). `--version` prints
+the version and board (from the argument, the tag, or a dispatched run's input read from the event file, never
+interpolated into a command), `--check DIR` checks a folder. `.github/workflows/release.yml`: **draft** (the release as
+a draft with the notes, now with the `gh attestation verify` line, `LICENSE`, `LICENSING.md`, `LICENSES.zip`, and
+`SMK37.md` for the SMK; it stops first when a site-publishing FM-1 version is not `web/releases.json`'s first entry or
+the release is already published: a public release's signed files are never rebuilt), **build** (`uses:
+zvenson/fm1-build/.github/workflows/build.yml@v1`, `build: bash tools/hub_build.sh`, `packages: choralroot-*`, `sdk:
+false`; contents, id-token and attestations write; it also runs alone from the Actions tab: signed, no release, the
+artifact `packages`), **publish** (downloads the draft's `choralroot-*` and `SHA256SUMS`, counts four or twelve,
+`sha256sum -c`, `gh attestation verify` each with `--signer-workflow`, `--signer-digest` v1's commit (`FM1_BUILD_V1_SHA`:
+a moved v1 tag stops the release), `--source-ref`, `--source-digest` and `--deny-self-hosted-runners`, `hub_build.sh
+--check`, then `gh release edit --draft=false`, and pages.yml as before, for the FM-1 and the SMK). Gone: our own
+toolchain cache, setup-python and the SDK check step (tools/build.py checks the three files' SHA-256 itself), and
+`ATTRIBUTION.txt` (only a FELUCCA_SAMPLE build has it: hub_build.sh stops on one). The flow keeps the order the
+installer needs: the sums are committed before the tag from the owner's build, and the signed packages are checked
+against them before the release is public, so what the hub compares (the attested SHA-256 and the file it mirrors) and
+what the installer compares (`web/releases.json`) are the same bytes. BUILDING.md "Releasing" (the three jobs, the
+fallback without the toolchain now leaves an unsigned release), "Signed builds" and "Checking a package"; HANDOFF's
+release steps. **The identity**: the hub's live table (catalog.json, 2026-10-20 02:03 UTC; 74 firmwares with an
+identity) has FM-1_920 as ChoralRoot's alone ("own"); shared are FM-1_900 (16 firmwares), 910 (3), 911, 950, 951 and
+700 (2 each). So ChoralRoot keeps FM-1_920: a version-encoded identity in X0X's style (FM-1_9200026) would gain
+nothing on the hub and break what keys on three digits: the hub resumes an interrupted Felucca-loader update only for
+FM-1_9NN, our installer's `OUR_LOADER` (`web/fm1ota.js`, `_[789]\d\d`) and `web/make_site.py`'s `FM-1_9\d\d` would
+refuse it, and the SMK identities (SMK-37 Pro_920 ...) and every unit updating from an older version have 920. Seen in
+the catalogue: the hub serves ChoralRoot's **single-core** package (`fw/choralroot-0.25.1.fwsc`, sha256 1dcac28c..,
+`sha256_1core`), not `choralroot-0.25.1.fwsc` (the KB: "If your release has more than one .fwsc, tell us which one
+is the firmware"): for the owner to tell the hub. **Checked**: actionlint 1.7.7 (release.yml, pages.yml: no errors),
+shellcheck 0.10.0 on hub_build.sh (clean); `--version` and `--check` on the cases (0.25.1 matches, the 13.0 build is
+refused, an unlisted 0.27 is an error on a tag and a notice otherwise, -rc a notice, `bad..` refused); the workflow's
+steps around the command simulated in `ubuntu:24.04` (Python 3.12.3 venv, `pip install Pillow`, the toolchain, `bash
+tools/hub_build.sh` as a v0.25.1 tag build): the four sums are the published v0.25.1 `SHA256SUMS` exactly; and this tree (13b0adb with
+hub_build.sh) as a run from the Actions tab, version 0.26-hubtest: its four sums are the Mac's `tools/hub_build.sh
+0.26-hubtest` (Docker; e371537a.., 3fb17c50.., 197ffc39.., c1094cf8..) exactly. **Not testable without pushing**: the
+reusable workflow's call (permissions, `uses:` at v1), the attestation and its verification, softprops filling our
+draft, `gh release download` from a draft, publishing the draft, the pages dispatch from publish, and the hub's sync
+showing the key. Test plan (for the owner): (1) push this branch (no tag) and run release.yml from the Actions tab on it
+with version `0.26-hubtest`: no release; fm1-build builds and signs the branch, and its artifact `packages` must
+equal a local `tools/hub_build.sh 0.26-hubtest` (the sums above), `gh attestation verify` passing on each file. (2)
+The whole tag flow away from ChoralRoot's releases: a public scratch repository (say Quixotic7/cr-release-test) with
+this branch as its main, `git tag v0.26-hubtest1` pushed there: a draft, the signed files in it, publish's checks, a
+pre-release (a suffix: no site); delete the repository afterwards (attestations stay in Sigstore's public log, naming
+that repository). (3) The first real release (0.26, or a beta) with this release.yml; the hub's next sync should show
+the key. Not pushed. No device.

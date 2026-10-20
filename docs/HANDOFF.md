@@ -163,7 +163,11 @@ BUILDING.md "Releasing" has them in full. The ones that are easy to forget, in o
    entry that was first gets a `going_back` note). The web installer's button, notes and "Other versions", the landing page's "New in X.Y" and the packages the
    site hosts all come from this file; `python3 tests/releases_test.py` checks it, and the Pages job refuses to
    publish a version that is not its first entry.
-3. The browser emulator's test (Verification, above), then the tag when the owner says so.
+3. The browser emulator's test (Verification, above), then the tag when the owner says so. release.yml builds and
+   signs the packages in The Firmware Hub's shared workflow (`zvenson/fm1-build@v1`, running `tools/hub_build.sh`;
+   BUILDING.md "Signed builds"): the release starts as a draft and is published only when the signed packages are
+   the ones `web/releases.json` lists. Never upload or replace a package on a release by hand: the hub's "Built from
+   source on GitHub" holds only for the signed files.
 
 A beta (`X.Y-betaN`, opt-in in the installer): the same steps with `"beta": true` on its entry; BUILDING.md "A beta
 release".
