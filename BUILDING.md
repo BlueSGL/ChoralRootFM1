@@ -366,7 +366,7 @@ Docker), so the sha256s committed in `web/releases.json` before the tag are the 
 `tools/hub_build.sh` replaces the workflow's Pillow with the pinned 11.1.0 and adds fontTools 4.66.1 and Raqm: the
 newest Pillow 13.0 and fontTools 4.67 draw the UI fonts and icons differently, and without FriBiDi the font build
 stops. The Python version (3.12 there, 3.11 on the Mac) and the toolchain download (`20260730.1` from JieLi's
-server since October 2026, `20250324.1` on the Mac) make no difference (HISTORY 3y186). To move to a new Pillow or
+server since October 2026, `20250324.1` on the Mac) make no difference (HISTORY 3y190). To move to a new Pillow or
 fontTools, pin it in `tools/hub_build.sh`, install the same version on the Mac, and take the release's sums from that
 build.
 
@@ -380,5 +380,5 @@ gh attestation verify choralroot-X.Y.fwsc --repo Quixotic7/ChoralRootFM1 \
 ```
 
 It prints the tag, the commit and the build run. Add `--source-ref refs/tags/vX.Y` to require that tag. The same
-works for the single-core package, the apps and the SMK-37 packages. Releases before the first signed one (0.25.1
-and older) have no attestation; their sha256s are in `SHA256SUMS` and `web/releases.json`.
+works for the single-core package, the apps and the SMK-37 packages. Releases before the first signed one (0.26,
+0.26-smk37 and older) have no attestation; their sha256s are in `SHA256SUMS` and `web/releases.json`.

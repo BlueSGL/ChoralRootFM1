@@ -14,7 +14,7 @@
 # and, on a tag, uploads them with its SHA256SUMS to the release. A package whose sha256 is not the listed one
 # stops here, before anything is signed or released.
 # The shared workflow's Python 3.12 with these pins makes the owner's packages (Python 3.11, Docker) byte for byte:
-# v0.25.1 rebuilt so on ubuntu 24.04 (HISTORY 3y186); the newest Pillow / fontTools (13.0 / 4.67) do not.
+# v0.25.1 rebuilt so on ubuntu 24.04 (HISTORY 3y190); the newest Pillow / fontTools (13.0 / 4.67) do not.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

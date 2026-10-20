@@ -5887,6 +5887,145 @@ landing page says New in 0.25.1 and shows `img/panel-main-fm1.png`, `webapp/smk3
 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
 orchestrator pushes main and tags v0.25.1; no SMK tag). No device.
 
+## 2026-10-17 (Bubba Machine: back to V15, and the installers tell it apart)
+
+3y176. **An FM-1 on Bubba Machine 0.8.0-beta back to the official V15, and both installers recognise Bubba Machine (the
+owner, 2026-10-17: "I flashed this firmware https://github.com/Erbubar23/bubba-machine and it softbricks the FM-1 with
+no way to go back to any other firmware", then "Please try and get my device back to V15").** Before:
+`tools/fm1_install.py --info` read `FM-1_003 [running] port: FM-1 Bubba Machine`, no unit ID, and called it "the
+official M-VAVE firmware (FM-1_003)": Bubba Machine answers the handshake as FM-1 version 3 (its `FM1_IDENT`, so that
+M-UPGRADE offers V15) and its USB product name is "FM-1 Bubba Machine". **Why nothing else installs over it**: its
+updater (`hal/fm1/fm1_update.c` there) speaks M-VAVE's protocol but takes only a package whose update loader is M-VAVE's
+own (`usb_hid_ota.bin`: header CRC 0xEBAA, data CRC 0x5881, 0x4DE1 bytes, load address 0x01C0A800) and whose `flash.bin`
+head 0x0000..0x3FFF equals the unit's; every Felucca-family package (ChoralRoot's included) carries the Felucca loader,
+so Bubba refuses it after the first reads, erases its staging area and writes nothing. **Back to V15**: `caffeinate
+-dimsu python3 tools/fm1_install.py MvaveFM1Unbricker/FM-1.fwsc --yes` (M-VAVE's file, sha256
+db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a): 74 reads (the header, the loader, the head),
+"switching to update mode", M-VAVE's loader wrote it, "done: the FM-1 runs FM-1_015", exit 0; `--info` after: `FM-1_015
+[running] port: FM-1`. No backup was possible (Bubba Machine has no backup protocol). Which physical unit it was cannot
+be told from here (no unit ID on Bubba or on stock). Bubba's own data stays in the settings area: V15 may read it as
+garbled presets (System > Reset Patches; MvaveFM1Unbricker `repair-settings`). **The installers**:
+`classify_firmware(identity, info, port)` and `classifyFirmware(identity, info, port)` (web/fm1ota.js) take the MIDI
+port's name; a port named "...Bubba..." on an FM-1 identity is kind `bubba`, "Bubba Machine (FM-1_003)", refused, also
+with `--force` and with the page's override (the override box is not offered: Bubba's updater would refuse the package
+anyway), and the text says the way out: the official V15 with this tool, the page's "Return to official V15" or Bubba's
+own installer, then ChoralRoot. `--info` names it and prints the same. FM-1_003 on the FM-1's own port is still the
+stock firmware. The return to V15 stays allowed over anything. docs/INSTALL-COMPAT.md: the policy's row and a "Bubba
+Machine" section; README's "Over which firmware". **Tests**: tests/install_test.py (seven port cases; installs over
+Bubba with and without `--force` refused, exit 8, no upgrade sent; FM-1_003 on the port "FM-1" installed; `--info`; the
+port cases against fm1ota.js); web/test_installer.mjs (`FakeFM1` takes a port name; the page over Bubba refuses with the
+text and no override box, the override ticked still refuses, "What is on my FM-1?" names it; FM-1_003 on "FM-1"
+installs). `CR_VERSION=0.25.1 sh tests/run_all.sh` ALL SUITES PASSED (23 suites). Not pushed.
+
+## 2026-10-17 (the VA chord's voices on both cores)
+
+3y177. **The VA chord's voices on both cores, as P5's since 3y46 (item 1 of docs/notes/melodee-p5-dualcore-review.md,
+the review of Kerem Kilic's nightly dual-core scheduling for Melodee; the ideas alone, no code taken).** The unit's
+heaviest case was a VA chord rendered whole on core 0: MORPH PAD, 8 notes, over PUNCH BASS. **Before, on the owner's
+unit** (5BD75BE3, ChoralRoot 0.25, Dual Core On, 2026-10-17; `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us
+of 2902; docs/notes/melodee-p5-dualcore-review.md): va block 3256 (112 %), tick 354, part0 2397, part1 375, fx 484,
+master 159, wait 175, t5 308, wall 3547, late 36, stale 0, shed 30 since power-on, averages 2079 / p0 1540 / fx 341;
+fm6 (TINE EP + DEEP SUB) block 2799 (96 %), part0 1764, part1 641, fx 529, wait 184, late 2, shed 11 in the run,
+averages 1669 / p0 1072 / fx 361. Against 2026-10-14 (docs/INTEGRATION.md "Measured on the unit": block 3121, part0
+2293) the fx stage fell (611 -> 484, 3y50) but part0 did not: the chord on core 0 alone is the overload, while core 1
+waits after its 375 us bass; and FM6 now sheds dry too. **Again on 13b0adb** (0.25.1 with MOD's black background, 3y185,
+flashed 09:08 UTC; this session, 09:13 .. 09:16 UTC, the same command, shed cumulative since the flash): dry va block
+3263, tick 344, part0 2385, part1 365, fx 482, wait 176, t5 264, late 32, shed +30, c0busy 3319 / c1busy 706; fm6 block
+2719, part0 1722, part1 596, wait 186, late 3, shed +10, c0busy 2729 / c1busy 938. Recording (`--record`): va block
+3384, part0 2509, part1 387, wait 221, t5 451, late 51, shed +50, c0busy 3527 / c1busy 717; fm6 block 2936, part0
+1870, part1 636, wait 228, late 12, shed +30, c0busy 3060 / c1busy 999. Then a backup,
+`fm1-backups/fm1-backup-2026-10-17-before-va-split.json` (69 593 B); the install of package A was refused by this
+session's permission rules (the flash-025 session installed A and B, below). `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
+(`VA_VOICE_US` 280, the unit's row / 8), 0 for the rest; `fx.c mix_parts_split` splits the chord part when its engine
+has it (was `P5_IS(t0)`). The protocol is 3y46's, unchanged: core 0 prepares every voice before the ONE hand-over
+(`voice.c track_render_x`, the `p5x` list), `c1_part1_job` renders the bass part and then core 1's share, now through
+the engine's `render2` / `render`, core 0 renders the rest, waits, adds; core 1 not answering, refusing or given up:
+core 0 runs the same job itself (DUALCORE.md "Reliability", "The persistent fallback" as they were). Melodee's
+streaming queue is not taken. **The side**: the VA's `render2` (SPREAD, USPREAD) on core 1 adds into `p5x_side` (128 B
+of POOL) and sets `p5x_side_on`; core 0 adds it into the part's side after the wait as it adds `p5x_buf` into the mid
+(`p5x_run` takes `side`, `side_on`). **The weights** (`p5x_assign(t0, ..)`): a chord voice its engine's weight, the
+bass as before (P5 voices 440, another engine 75 a unit), core 0's side x 1.07 (`P5X_C0_PCT`, TIMER5's ticks nested in
+core 0's audio ISR: Melodee's "CPU0 service allowance", the idea), the four a core and `P5_FILL_C1_FIRST` P5's alone.
+VA over a sounding MONO bass (core 0 + core 1): 8 voices 4 + 4, 7 4 + 3, 6 3 + 3, 5 3 + 2; over a P5 stack of four 7 +
+1. For P5 the factor changes no split with a MONO or a P5 bass; it moves one voice to core 1 for a 2-, 4- or 6-voice
+chord over a POLY bass of another engine of three voices (or six, seven of one unit): the samples are the same. P5's
+78 PEAK counts stay P5's (a VA chord over a P5 bass counts the bass, as `p5x_bass_count` did). **The audit**
+(docs/VA.md "Two cores", as PROPHET.md's for P5): `va_render` writes its own `va_vs[part][voice]` and `voice_t` (the
+noise seeds are per voice, `s[2]`; BROWN / VINYL's state in `nz`), the buffers it is given, and from the latest
+note's voice alone `va_pan_off` / `va_rate_off` (one writer, read on core 0 after the join); it reads `va_lfo`
+(`va_block`'s, before the hand-over) and the patch; its callees are pure. Core 1's stack: `c1_part1_job` 68 B ->
+`va_render` 844 B, shallower than a VA bass's path through `track_render_x` (212 B). **`CR_RAM_VA=1` did not link**
+(since GRAIN shares `va_fweights`, 3y118, it is called out of line: "relocation truncated to fit"): a veneer in
+`cr_ram.c`; `ram_code.py cmp` 4 moved, 0 functions differ, veneers `memset` and `va_fweights`, RAMTEXT 16 120 of 24 576.
+Size (default): XIP 543 244 B (+416, 94.7 %), RAM 80 544 (+0), POOL 308 636 (+128). **Tests**: `tests/cr_c1_thread_test.c`
+19 pairs (+4: VA chord over FM6, CZ-1, MORPH PAD over PUNCH BASS with core 1's SPREAD side in 1463 of 3000 blocks, a
+UNISON chord with USPREAD); for the six VA-chord pairs inline = thread = unsplit = all to core 1 = none, every sample,
+each core rendering chord voices (at most four each over a VA, FM6 or CZ-1 bass; seven on core 0 over a P5 stack); ThreadSanitizer 0 reports over 19 pairs, the planted word still
+reported. test_cr.sh `cr_va_eight` (new script: MORPH PAD, eight MIDI notes, PUNCH BASS, a chord change): eight voices
+and the bass, inline = `EMU_C1=thread` bit for bit, `EMU_C1=nostart` the chord seven under the bass (one core's
+budget), `EMU_C1=hang` one core's WAV for the first 7.9 s and Dual Core Off; the emulator's stages (device us a half,
+avg / max) part0 613 / 1335 and part1 31 / 152 before, 332 / 746 and 330 / 792 after, the WAV the same as before bit
+for bit. `tools/perf_unit.py`: a third table, "cores" (78 PEAK's `pk_c0_busy_us`, `pk_c1_busy_us`, `pk_c0_wait_us`,
+`pk_fx_join_us`, `pk_c1_idle_us`). **Checked**: `sh tests/run_all.sh` 23 suites, every one PASS but test_cr's new hang
+check on the first run (its `c1 gave up` is printed with EMU_STAGES only: set), then test_cr.sh alone 1092 ok, 0 FAIL;
+317 golden renders, 0 changed; 0 lint. **For the owner's unit** (not run): `build/scratch/va-split/` in this worktree,
+packages rebuilt after origin/main 13b0adb was merged into the branch (run_all again: 23 suites PASS, test_cr
+1092 ok, 317 goldens unchanged): A (the default build) sha256 1d3edce19139f297ade7214f4291cb38d343c5fb0aab0007a895d757e1a95c81
+and B (`CR_RAM_VA=1`) 7145de4eb352f0f8a09855e7a138e2f4cd1f0125cae00427eaaf479597754d68, 610 313 B each, with README.txt's plan: `perf_unit.py
+va fm6 --seconds 20` dry and `--record` first (done on 13b0adb, above), a backup (done), A, B (power-cycle and
+`--debug` once after each), back to 13b0adb (`choralroot-13b0adb.fwsc`, sha256 77520d32...). Expected (estimates, from
+the 0.25 before: 2397 / 8 = 300 us a voice): part0 about 1300 .. 1500, part1 about 1450 ..
+1650 (the bass and four voices: core 1 the longer side), the block about 2450 .. 2650 instead of 3256 (84 .. 91 %), no
+shed dry; fm6 unchanged (the control: FM6 is not split yet, and its dry shed is the next step's case). Next: FM6's chord (a third
+`fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.
+
+**On the unit, A and B (2026-10-17, 09:20 .. 09:45 UTC; the flash-025 session, the owner: "Yes: flash package A,
+measure, then B, measure, then back to 13b0adb, through your flash session (backup first, --unit 5BD75BE3)").** A
+(1d3edce1...a95c81) and B (7145de4e...754d68) as built here, sums exact; a backup first
+(`fm1-backups/fm1-backup-2026-10-17-before-va-split-flash.json`, 69 593 B, the same 34 objects as this session's;
+the backup after the run identical too); the installer's restart between flashes (no power-cycle), one `--debug` to
+clear the peaks. `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us of 2902, shed its rise in the run:
+
+| | block | part0 | part1 | wait | c0busy | c1busy | late | shed |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| va, 13b0adb, dry | 3263 | 2385 | 365 | 176 | 3319 | 706 | 32 | +30 |
+| va, A, dry | 2389 | 1498 | 1342 | 266 | 2339 | 1650 | 0 | 0 |
+| va, B, dry | **2103** | 1289 | 1159 | 229 | 2040 | 1454 | 0 | 0 |
+| va, 13b0adb, recording | 3384 | 2509 | 387 | 221 | 3527 | 717 | 51 | +50 |
+| va, A, recording | 2574 | 1593 | 1318 | 278 | 2633 | 1640 | 1 | +20 |
+| va, B, recording | **2287** | 1389 | 1159 | 243 | 2270 | 1449 | 0 | 0 |
+| va 6 notes, A / B, dry | 2482 / 2098 | 1500 / 1284 | 1335 / 1158 | 271 / 233 | 2421 / 2015 | 1658 / 1435 | 0 / 0 | 0 / 0 |
+| fm6, 13b0adb, dry | 2719 | 1722 | 596 | 186 | 2729 | 938 | 3 | +10 |
+| fm6, A, dry | 2656 | 1699 | 576 | 171 | 2664 | 903 | 0 | 0 |
+| fm6, B, dry | 2468 | 1524 | 249 | 161 | 2466 | 553 | 0 | 0 |
+| fm6, 13b0adb, recording | 2936 | 1870 | 636 | 228 | 3060 | 999 | 12 | +30 |
+| fm6, A, recording | 2917 | 1859 | 632 | 209 | 3016 | 990 | 10 | +31 |
+| fm6, B, recording | **2565** | 1627 | 257 | 185 | 2638 | 568 | 0 | 0 |
+
+(A's first dry run, with the main checkout's older perf_unit.py and no cores table: va 2514 / 1497 / 1341, wait
+278, late 0; fm6 2733 / 1716 / 577, late 1; no shed.) `--debug` after each flash and after each package's runs, and
+after the flash back: c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0, pk_late 0. Back on 13b0adb: `FM-1_920
+[running] ... ChoralRoot 0.25.1`, package 77520d3218722f988aa271e2c6b24e77d8ffa5374516d2d916be97f7e7570c4a, `--sounds`
+128 slots, 84 used. What it says: the split took the VA pad's worst half from 112 % to 82 % of the half (A), and the
+VA in RAM to 72 % (B), with no late half and no shed dry or recording; the flash was the VA's cost, on both cores
+(the VA bass under FM6 on core 1: part1 576 -> 249). FM6 is still core 0's alone (part0 1524 .. 1627) and was the
+next step; under B it no longer sheds either.
+
+**B is the candidate: `CR_RAM_VA` on in a device build** (`tools/build.py RAM_DEFAULT_ON`, as `P5_RAM`;
+`CR_RAM_VA=0 ./build.sh` is A, byte for byte; the default build is B, byte for byte). Size: XIP 543 252 B of 573 440
+(94.7 %), RAMTEXT 16 120 of 24 576 (8456 B left: `CR_RAM_FM6`'s 6234 would fit beside it, `CR_RAM_CZ`'s 16 390 or
+`CR_RAM_CORE` + `CR_RAM_FX` would not), RAM 80 544 B of 98 304 (81.9 %), POOL 308 636 of 344 064 (89.7 %). The
+single-core package (`CR_SINGLE_CORE=1`) builds: XIP 540 256 (94.2 %), RAMTEXT 16 120, RAM 77 420, POOL 308 508. The
+SMK-37 (`BOARD=smk37`) builds: XIP 541 996 (94.5 %), RAMTEXT 16 260, RAM 81 340, POOL 308 636. **Bit-exact**: the host
+never sees `CR_RAM_VA` (`ram_code.py cmp`: every function instruction for instruction the same, 4 moved). The golden
+renders (`tests/regress.c`, 317) are one core's (`CR_CPU1 0`): unchanged. Built with `CR_CPU1=1` and core 1 alive
+(`cr_dbg.c1 = C1_OK`; a scratch wrapper, `build/scratch/va-split/goldens_c1.sh`), the 317 renders with the chord
+voices shared out are those with `cr_c1_test_nosplit`, every one; and that two-core set is 13b0adb's, every one (101
+of them differ from the one-core goldens, on 13b0adb as here: the two cores' voice rules, not the split). **For the
+players** (a release-note line): "Dual Core plays a VA chord on both cores now, and the VA's sound code runs from
+RAM: an 8-note MORPH PAD over a VA bass that used to run late and drop voices now uses about 72 % of the time it has (79 %
+while recording over USB), and FM6 chords over a VA bass gain too; the sound is the same, bit for bit."
+
 ## 2026-10-17 (MOD's background black)
 
 3y185. **MOD's background is black (the owner: "ChoralRoot's background is either a dark grey or the backlight is making
@@ -5923,9 +6062,146 @@ moved by at most one RGB565 step per channel (an edge blended over the backgroun
 change, no code). Before / after of the chord view and the editor's OSC and FILTER pages (the manual's shots) in the
 sessions' notes folder, `black-bg-3y185/`. Not pushed. No device.
 
+## 2026-10-17 (FM6's chord voices on both cores)
+
+3y187. **FM6's chord voices on both cores, as the VA's (3y177) and P5's (3y46)** (the orchestrator's go, after B's
+readings; numbered after main's 3y186 so that nothing is renumbered at the merge). `ENG_FM6.split` 20 (`FM6_VOICE_US`
+200: TINE EP 8 notes, part0 1524 .. 1627 on the unit under B). **The audit** (docs/FM6.md "Two cores") found two
+things a voice's render shared. (1) **The render's scratch** (`fm6_scr`: the modulator buses and the voice's sum) was
+chosen by part (`CR_C1_IDX`: part 1 on core 1), so core 1's chord voices would have used core 0's. It is now chosen by
+the core that runs (`CR_C1_SELF()`: the `cnum` register on the device, `hal/fm1_cpu1.h fm1_cnum`; a thread-local on
+the host's job thread; 3y45's part test kept for the inline stub). Core 1 renders the bass part and then its chord
+voices one after the other, so its one scratch serves both: **no third `fm6_scr`** (the review's 384 B). (2) **The
+part's AMS shares** (`P->pt.amd`, `pok`, `pt[]`) were figured lazily in `fm6_control` by the first voice of a block to
+need one. Every voice of a block has the part's one modulation (`fm6_amd`, split out: the LFO, its delay, the
+controllers, the EG bias), so `fm6_block` now figures the shares on core 0 before the hand-over, for the operators
+that sound and when a voice is active (`fm6_ams_share`, the old code moved; both `always_inline`, so `fm6_control`
+compiles as it did); the voices then only read them. The same values, so the same samples. **Proof that both were
+needed**: ThreadSanitizer with the scratch by part: 10 reports (`fm6_op`'s buses); with the shares lazy: 4
+(`fm6_ams_share`); with both changes: 0 over 22 pairs. `CR_RAM_FM6=1` linked no more (`fm6_block` in flash now calls
+`fm6_mulhi` in RAM through the inlined share): a veneer in `cr_ram.c`; with `CR_RAM_VA` beside it RAMTEXT 22 372 of 24
+576, `ram_code.py cmp` 0 functions differ. **Cost**: RAM +0, POOL +0, XIP +944 B (543 252 -> 544 196 of 573 440, 94.9 %;
+RAMTEXT 16 120 as B). Single-core package: XIP 541 200 (94.4 %), RAM 77 420. SMK-37: XIP 542 924 (94.7 %), RAMTEXT 16
+260, RAM 81 340. **Tests**: `tests/cr_c1_thread_test.c` 22 pairs (+3: FM6 chord over CZ-1, TINE EP over DEEP SUB, a
+patch with AMS 1..3 on every operator and the LFO's AMD 90, whose shares were in use in 2948 of 3000 blocks); for
+the six FM6-chord pairs inline = thread = unsplit = all to core 1 = none, every sample, each core rendering chord voices (four and four over an FM6, VA
+or CZ-1 bass; over a P5 stack of four, core 1 up to four and core 0 all eight in its blocks).
+test_cr.sh `cr_fm6_eight` (new: TINE EP 8 MIDI notes, DEEP SUB, a chord change): eight voices and the bass,
+inline = `EMU_C1=thread` = `EMU_C1=nostart` (eight FM6 voices and the bass fit one core's budget) bit for bit, the
+WAV 765c033's; `EMU_C1=hang` one core's WAV for the first 6.4 s, Dual Core Off; test_cr 1098 ok. **Bit-exact, one core
+and two**: the 317 goldens (one core) unchanged; built with `CR_CPU1=1` and core 1 alive
+(`build/scratch/va-split/goldens_c1.sh`), split = unsplit for all 317, and that set = 765c033's = 13b0adb's.
+**The emulator** (`cr_fm6_eight`, device us a half, avg / max): part0 249 / 684 and part1 28 / 113 before (765c033),
+146 / 578 and 145 / 418 after (a second run 146 / 461, 145 / 392). **The estimate for the unit** (not measured): under B
+TINE EP over DEEP SUB is block 2468 dry / 2565 recording, part0 1524 / 1627, part1 249 / 257, no late half and no shed.
+Four voices a core would take the longer side to about 950 .. 1000; the emulator's peaks fall less than its averages
+(16 .. 33 % against 41 %: the peak blocks hold core 0's own `fm6_block`, the released voices' ghost ticks after a
+chord change, the patch sync). So the worst half about 250 .. 550 us lower: dry about 1900 .. 2200 (66 .. 76 %),
+recording about 2000 .. 2300 (69 .. 79 %). Headroom, not a fix: the recording row's spare goes from 12 % of the half to
+about 20 .. 30 %. **Package C** (B + this, the default `./build.sh`): `build/scratch/va-split/choralroot-C-fm6-split.fwsc`,
+610 313 B, sha256 213076576bff30681d6a971d74dfe84dd036b5a1c55bff4012c945758bad0d2b. **Checked**: `sh tests/run_all.sh` ALL
+SUITES PASSED (23; test_cr 1098 ok, 317 goldens unchanged, 0 lint), its build package C byte for byte.
+
+**On the unit, C against B (2026-10-17; the flash-025 session for the orchestrator):** a backup first
+(`fm1-backups/fm1-backup-2026-10-17-before-pkg-C.json`, 69 593 B), C's sha256 matched, then B flashed back for its
+second reading. `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us of 2902; late, stale and shed 0 in every row of
+both builds:
+
+| | block | part0 | part1 | wait | c0busy | c1busy |
+| --- | --- | --- | --- | --- | --- | --- |
+| fm6 dry, B | 2468 | 1524 | 249 | 161 | 2466 | 553 |
+| fm6 dry, C | **2012** | 1023 | 816 | 322 | 1920 | 1134 |
+| fm6 recording, B | 2565 | 1627 | 257 | 185 | 2638 | 568 |
+| fm6 recording, C | **2124** | 1138 | 836 | 324 | 2135 | 1152 |
+| va dry, B (two runs) | 2103 / 2146 | 1289 / 1286 | 1159 | 229 / 226 | 2040 / 2091 | 1454 / 1451 |
+| va dry, C (two runs) | 2164 / 2166 | 1304 / 1297 | 1160 / 1162 | 226 / 269 | 2085 / 2089 | 1448 / 1443 |
+| va recording, B / C | 2287 / 2198 | 1389 / 1401 | 1159 / 1160 | 243 / 229 | 2270 / 2241 | 1449 / 1447 |
+| va 6 notes, B / C | 2098 / 2110 | 1284 / 1294 | 1158 / 1160 | 233 / 238 | 2015 / 2035 | 1435 / 1438 |
+
+`--debug` after flashing C, after its runs, after flashing B back and at the end: c1_state 1, c1_faults 0,
+c1_fallback 0, pk_late 0, stale_halves 0. FM6's worst half 456 us lower dry (85 % -> 69 % of the half) and 441
+recording (88 % -> 73 %), inside the estimate's 250 .. 550; core 1 now carries 816 .. 836 of part work against core 0's
+1023 .. 1138, so the split's 4 + 4 leaves core 0 the longer side by about 200 .. 300 (its fm6_block, the ghosts: the 1.07 and
+200 us weights could move one voice more, not tried). The VA rows are B's within run-to-run noise (B's own dry varied
+43 us between two runs): the VA path is unchanged. C is on the unit as the candidate (the orchestrator).
+
+## 2026-10-17 (0.25.1 with the black background on the unit)
+
+3y188. **13b0adb, 0.25.1 with MOD's black background, on the unit (2026-10-17, early morning; the flash-025 session;
+3y186 on its branch, dc73d07, renumbered at the 0.26 merge to stand after 3y187).**
+The owner: "Push 13b0adb to main and flash it on my FM-1 (backup first)." origin/main was 13b0adb already (nothing to
+push from here). Built in the main checkout at a detached 13b0adb (then back on the branch it was on):
+`build/choralroot.fwsc` 610 313 B, identity FM-1_920, sha256
+77520d3218722f988aa271e2c6b24e77d8ffa5374516d2d916be97f7e7570c4a, the same bytes as the black-bg worktree's build;
+copied to `build/flash-blackbg/choralroot-13b0adb.fwsc`. Before: `python3 tools/fm1_install.py --info` one FM-1,
+`FM-1_920 [running] port: ChoralRoot FM-1 version: ChoralRoot 0.25`, unit ID 5BD75BE3 (the 44e0c58 FM-1 chord keys
+build, flashed after 3y174; no version bump there). A full backup first:
+`fm1-backups/fm1-backup-2026-10-17-before-black-bg.json` (69 591 B, 34 objects): every object as in the backup before
+44e0c58 but the settings, whose record (v15, CRS1 at byte 572 of object 1) now holds `sticky` 0x07 (FM-1, LATCH) and
+`leds` 0x03 (Stock, and bit 1 `CRS_KEYS_MOVED`, 3y172's mark, written by a save since). Flashed: `caffeinate -dimsu
+python3 tools/fm1_install.py build/flash-blackbg/choralroot-13b0adb.fwsc --unit 5BD75BE3 --yes`: "done: the FM-1 runs
+FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". **Not alone on the unit:** the `pgrep` just before the
+flash listed an `fm1_install.py --midi-worker` of another session's worktree (`reverent-burnell-8b8084`); the command
+went on (the check printed, it did not stop it), and the worker was gone seconds after. After: `--info` `FM-1_920
+[running] port: ChoralRoot FM-1 version: ChoralRoot 0.25.1`, unit ID 5BD75BE3; `--sounds` all 128 slots read on
+ChoralRoot 0.25.1, 84 hold a sound (one more than the backup: U084 CLOUD PAD, GRAIN, over GRAIN 01 CLOUD PAD, written
+after the backup and not by the unit itself, "0 saves by the unit itself"; a backup after the flash differs from the
+one before in object 58 alone), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, boot
+stub v3 "booted the app after 64.0 ms; marker ok"; `stale_halves` 5 at the first read (a peak since power-on, cleared
+by reading), 0 at the next, with `pk_late` 0 and the one erase since power-on done ahead, none into a sounding output.
+Not pushed.
+
+## 2026-10-19 (0.26 and 0.26-smk37, the release tree)
+
+3y189. **0.26 and 0.26-smk37, the release tree (the owner, after playing package C: "This is all good push and tag for
+release"; the orchestrator's numbers, v0.26 stable and the SMK-37 build v0.26-smk37).** From origin/main 13b0adb
+(0.25.1 with MOD's black background, 3y185), merged in this order with their authorship: claude/reverent-burnell-8b8084
+(4bc751d: the VA's chord voices on both cores and `CR_RAM_VA` on, 3y177; FM6's, 3y187), flash-blackbg (dc73d07: 13b0adb
+on the unit, numbered 3y186 there and **3y188** here, after the split's 3y187, since 3y186 is also
+claude/hub-signing-4b7cd3's, which is not part of this release) and claude/bubba-classify (e495f4c: the installers
+recognise Bubba Machine, **3y176**, a number 3y175's tree left free: kept, its entry under its own 2026-10-17 heading
+before 3y177). The merges conflicted in this file only. **The firmware is package C**: `./build.sh` on the merged tree
+before the version bump gave 213076576bff30681d6a971d74dfe84dd036b5a1c55bff4012c945758bad0d2b, 610 313 B, the
+package on the owner's unit since 3y187: 3y188 is a record and the Bubba fix is in `tools/fm1_install.py` and the web
+pages, no firmware byte. After the bump the tree's firmware differs from 4bc751d's in `FELUCCA_VERSION` alone.
+`docs/releases/0.26.md` for players: the summary paragraph first; VA and FM6 chords on both cores with the VA's code in
+RAM, the unit's numbers against 0.25.1 (13b0adb, 3y177's "before": MORPH PAD over PUNCH BASS 3263 / 3384 us of the
+2902 us half, 112 / 117 %, late and shed, now C's 2164 / 2198, 75 / 76 %; TINE EP over DEEP SUB 2719 / 2936, 94 /
+101 %, now 2012 / 2124, 69 / 73 %), the same sound bit for bit, CZ-1 and GRAIN not shared; the black background;
+Bubba Machine (what the player meets: the refusal at once, also with the override, and the way back to V15); Installing
+(the SMK-37's 0.26-smk37); "Going back to 0.25.1": nothing to say about data, since nothing of the stored format
+changed (between 15ca8d0 and this tree the firmware changes are `audio.c`, `core.h`, `cr_cpu1.h`, `cr_ram.c`,
+`eng_fm6.c`, `eng_va.c`, `fx.c`, `voice.c`, `cr_draw.c` and the palette generator: no settings, store, backup or
+flash-layout code), only the one-core VA / FM6 render and the grey background there. `FELUCCA_VERSION` "ChoralRoot
+0.26"; README's "New in 0.26"; the manual's first line; SMK37.md's version (0.26-smk37, the packages, the commands, the
+splash). `web/releases.json`: 0.26 first, stable, dated 2026-10-19, sha256
+685077ff4fc2640c0c934be345134fcd05c8d64914a1d3706d1183351f924382, 1-core
+ad5401c29e9083d18964a3226cf668e1fe5d32270187ded5fdc287083e2cecf3 (610 313 B each), six bullets; 0.25.1's going-back
+note (everything stays; one core and the grey there). `web/releases-smk37.json`: 0.26-smk37 first on base 0.26, Pro
+143660c3158f6fdee26c058c6bab9329f5a50a38d94453447332cd7a773df0ce / 1-core
+f8f840fc1ddf7210b0a02545327f3a54050f663b6b3fc618deea3334d85ef249 (651 496 B), Elite
+c8403cced2270e615f1910c630dd053e0dd9add3174275c181fdee1a02460a0c /
+b73e9a8abd37f38426e30de43fefad84bf3a20d4c6e76e246e6ad1cf0abdfc36 (651 500 B), MKE
+0d1d53300e2106a6498fdfe55b7c31a58b1fe10c735252d9816ffa10078962be /
+807461f72bd4fe47a2b1408ce037fcbcd9e0a5fc33466dadfb0b743b44696fd6 (651 492 B). `./build.sh --release 0.26` twice and the
+three SMK models as 0.26-smk37 twice, the first folders moved aside: the same SHA256SUMS each time; the dev build of
+the tree is the release package's bytes (685077ff...). Size: XIP 544 196 B of 573 440 (94.9 %), RAM 80 544, RAMTEXT
+16 120 of 24 576, POOL 308 636 of 344 064; 1-core XIP 541 136, RAM 77 420; the SMK-37 XIP 542 924, RAMTEXT 16 260.
+**Checked**: `CR_VERSION=0.26 sh tests/run_all.sh` ALL SUITES PASSED (23 suites, 123 s; test_cr 1098 ok, test_persist
+119; 317 golden renders, 0 changed; 0 lint; the browser emulator built as 0.26 and the SMK-37's as 0.26-smk37,
+`test_web_emu.mjs` and `test_web_emu_smk.mjs` PASS). `CR_PACKAGES_DIR=build/release-0.26 python3
+tests/releases_test.py` releases ALL OK (both packages at their listed sha256s); with all 32 listed FM-1 packages
+(`build/scratch/packages`: 0.25.1's tree's 30 and 0.26's two) and the 30 SMK ones (`CR_SMK_PACKAGES_DIR`), ALL OK, 62
+sha256s compared, none skipped. site_test (in run_tests) site ALL OK ("make_site.py --require-all builds the site for
+0.26", "New in 0.26" with its bullets); `web/make_site.py build/choralroot.fwsc 0.26 build/scratch/site-full --packages
+build/scratch/packages --smk-packages build/scratch/smk-packages --require-all`: the landing page says New in 0.26,
+`webapp/smk37/` offers 0.26-smk37 first, then 0.25-smk37, 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37;
+no FM-1 page links it. Not pushed, not tagged (the orchestrator pushes main, tags v0.26, then v0.26-smk37 once the
+FM-1 release exists: pages.yml fails while web/releases-smk37.json names a release that does not exist yet). No device.
+
 ## 2026-10-19 (signed releases: The Firmware Hub's shared build workflow)
 
-3y186. **Releases built and signed by The Firmware Hub's shared workflow (the owner: "thefirmwarehub now supports signing
+3y190. **Releases built and signed by The Firmware Hub's shared workflow (the owner: "thefirmwarehub now supports signing
 see https://thefirmwarehub.com/kb/#sign we should get this working with ChoralRoot").** The hub's knowledge base ("How to
 sign your release", "What the hub checks", "Built from source", "Getting your firmware listed", 2026-10-19): a card
 gets **Built from source on GitHub** when the package on the release has a GitHub artifact attestation signed by
@@ -6002,5 +6278,21 @@ equal a local `tools/hub_build.sh 0.26-hubtest` (the sums above), `gh attestatio
 The whole tag flow away from ChoralRoot's releases: a public scratch repository (say Quixotic7/cr-release-test) with
 this branch as its main, `git tag v0.26-hubtest1` pushed there: a draft, the signed files in it, publish's checks, a
 pre-release (a suffix: no site); delete the repository afterwards (attestations stay in Sigstore's public log, naming
-that repository). (3) The first real release (0.26, or a beta) with this release.yml; the hub's next sync should show
-the key. Not pushed. No device.
+that repository). (3) The first real release after 0.26 with this release.yml; the hub's next sync should show the
+key. Not pushed. No device.
+
+**The dry run (step 1), and the merge (2026-10-20).** The branch pushed as `hub-signing` (12b0c40) and release.yml run
+on it from the Actions tab with version 0.26-hubtest (run 39380902148): green, no release (draft and publish
+skipped). GitHub holds one attestation for each of the four 0.26-hubtest files, signed by
+`zvenson/fm1-build/.github/workflows/build.yml@refs/tags/v1`; among them `choralroot-0.26-hubtest.fwsc` e371537a.. and
+`-1core.fwsc` 3fb17c50.., the sums `tools/hub_build.sh 0.26-hubtest` makes on the Mac (Docker) on the same commit: the
+hub's packages are the Mac's byte for byte. The owner: "Merge hub signing onto main (renumber its HISTORY entry) so
+the next release is signed": merged with main at 6412d05 (v0.26, 3y189), this entry renumbered from the branch's 3y186
+to 3y190 (main's 3y187 .. 3y189 came first; main's own mentions of a 3y186 stay as written). 0.26 and 0.26-smk37
+were released by the old release.yml, unsigned: the first signed release is the next tag. **Checked on the merged tree**: `tools/hub_build.sh 0.26` makes v0.26's
+published four (685077ff.., ad5401c2.., 128dc0ab.., b98e3928..; "web/releases.json: 0.26's 2 sha256s match") and
+`tools/hub_build.sh 0.26-smk37` the three models' twelve as v0.26-smk37's `SHA256SUMS` (pro 143660c3.., its 1-core
+f8f840fc..; "web/releases-smk37.json: 0.26-smk37's 6 sha256s match"), both releases' `SHA256SUMS` identical line for
+line; `python3 tests/releases_test.py` ALL OK; `CR_VERSION=0.26 sh tests/run_all.sh` ALL SUITES PASSED (23 suites;
+test_cr 1098 ok, test_persist 119; 317 golden renders, 0 changed; 0 lint); `./build.sh`: XIP 544 196 B of 573 440
+(94.9 %), RAM 80 544, POOL 308 636; `python3 tests/site_test.py` ALL OK. Not pushed. No device.

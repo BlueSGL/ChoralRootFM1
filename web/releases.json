@@ -8,6 +8,26 @@
   },
   "releases": [
     {
+      "version": "0.26",
+      "date": "2026-10-19",
+      "tag": "v0.26",
+      "sha256": "685077ff4fc2640c0c934be345134fcd05c8d64914a1d3706d1183351f924382",
+      "sha256_1core": "ad5401c29e9083d18964a3226cf668e1fe5d32270187ded5fdc287083e2cecf3",
+      "title": "VA and FM6 chords on both cores, a black background",
+      "bullets": [
+        "With Dual Core On, VA and FM6 chords are now shared between the FM-1's two cores, as P5's are, and the VA's sound code runs from fast memory.",
+        "An 8-note VA pad over a bass that used to run late and drop notes now uses about three quarters of the time it has, while recording too.",
+        "FM6 chords keep a good margin while you record: an 8-note TINE EP over a bass went from just over its time to about 73 %.",
+        "The same sound, bit for bit: a chord played on two cores is the same samples as on one.",
+        "The screen's background is pure black instead of a very dark grey.",
+        "The installer recognises the Bubba Machine firmware and shows the way back to the official V15 before ChoralRoot."
+      ],
+      "notes": [
+        "Updating from 0.25.1 keeps your settings, sounds, loops and favorites; from 0.25 or older, your FM-1 also moves to the FM-1 chord keys once, as with 0.25.1.",
+        "The Single core package plays everything on one core, as before, with the VA's faster code."
+      ]
+    },
+    {
       "version": "0.25.1",
       "date": "2026-10-16",
       "tag": "v0.25.1",
@@ -24,7 +44,14 @@
       "notes": [
         "Updating from 0.25, 0.24 or 0.23 keeps your settings, sounds, loops and favorites; only the chord keys change, to FM-1.",
         "A new FM-1, Options > Reset Settings and Flash Data start on the FM-1 chord keys."
-      ]
+      ],
+      "going_back": {
+        "short": "Your settings, sounds, loops and favorites stay: 0.26 stores everything as 0.25.1 does.",
+        "points": [
+          "On 0.25.1 VA and FM6 chords render on one core again: the same sound with less room, so a dense VA pad over a bass can run late and drop notes there.",
+          "The screen's background is the dark grey again."
+        ]
+      }
     },
     {
       "version": "0.25",
