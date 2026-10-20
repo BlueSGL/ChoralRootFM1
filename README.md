@@ -71,6 +71,8 @@ user sounds and FM6 patches on ChoralRoot (its samples stay in the file: ChoralR
 Sloop, the Felucca 0.x betas and firmwares they cannot identify: an FM-1 has been bricked by an install over Sloop,
 and Felucca 0.9-beta to 1.0 bricked several (the loader wrote correctly both times; the cause is still open;
 [docs/INSTALL-COMPAT.md](docs/INSTALL-COMPAT.md)). Return to the official V15 with that firmware's installer first.
+**Bubba Machine** takes only M-VAVE's own package, so ChoralRoot cannot go over it directly: return to V15 with the web
+installer's "Return to official V15" (or `tools/fm1_install.py FM-1.fwsc`), then install ChoralRoot.
 
 **SAFE MODE.** If ChoralRoot crashes twice in a row within 30 s of starting (switching it off and on does not count),
 it starts in SAFE MODE (a yellow screen, "Safe mode" on the top line): it plays its factory sounds and ignores what is
