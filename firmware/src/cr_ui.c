@@ -573,6 +573,7 @@ static struct {
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
                                            * 1 play (roots and chord keys as outside the layer); OPT tapped in the
                                            * layer (v13) */
+    uint8_t vmode, vwin, vcenter, vspread; /* KEY layer Page 3: Voicing Mode, Window Size, Center Note, Spread */
     uint8_t key_notes;                    /* the KEY layer's page 2, Key plays: 0 Chords, 1 Notes (Key Mode blocks the
                                            * roots out of the scale and generates no chord; v14) */
     uint8_t kbd_full;                     /* .. Keyboard: 0 Chords (the chord block + 18 roots), 1 Full (27 single-note
@@ -3878,6 +3879,25 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
     int32_t v;
     switch (l) {
     case L_KEY:
+        if (cu.kpage == 2) {                       /* page 3: VOICING MODE, WINDOW SIZE, CENTER NOTE, SPREAD */
+            if (knob == 0) {
+                cs.vmode = (uint8_t)(s > 0 ? 1 : 0);
+            } else if (knob == 1) {
+                v = (int32_t)cs.vwin + (s > 0 ? 1 : -1);
+                cs.vwin = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+            } else if (knob == 2) {
+                v = kn.snap ? kn_snap_rng(cs.vcenter, s, 36, 84, 12, 0) : cs.vcenter + s;
+                cs.vcenter = (uint8_t)(v < 36 ? 36 : v > 84 ? 84 : v);
+            } else if (knob == 3) {
+                v = (int32_t)cs.vspread + (s > 0 ? 1 : -1);
+                cs.vspread = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+            }
+            fm1_irq_off();
+            cr_set_voice_window(&cr, cs.vmode, cs.vwin, cs.vcenter, cs.vspread);
+            fm1_irq_on();
+            cu_hot_set(L_KEY, knob);
+            break;
+        }
         if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD, SNAP, NUMERALS */
             if (knob == 0) {
                 cs.key_notes = (uint8_t)(s > 0);
@@ -5204,9 +5224,10 @@ static void cu_knob(uint32_t role, int32_t s)
         }
         return;
     }
-    if (l == L_KEY && role == EN_SELECT) {         /* the KEY layer: SELECT turns its page (no tempo there) */
-        uint32_t pg = s > 0 ? 1u : 0u;
-        if (pg != cu.kpage) {
+    if (l == L_KEY && role == EN_SELECT) {         /* the KEY layer: SELECT turns its page (0, 1, 2) */
+        int32_t pg = (int32_t)cu.kpage + (s > 0 ? 1 : -1);
+        pg = pg < 0 ? 0 : pg > 2 ? 2 : pg;
+        if ((uint8_t)pg != cu.kpage) {
             cu.kpage = (uint8_t)pg;
             cu_hot.knob = 0;
             cu_trace("key: page %u\n", (unsigned)pg + 1u);
@@ -6849,6 +6870,26 @@ static void cu_key_cells(cr_screen_t *s)
 {
     static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
     uint32_t k;
+    if (cu.kpage == 2) {                           /* page 3 (SELECT): Voicing Mode, Window Size, Center Note, Spread */
+        static const char *const VWIN_NAMES[3] = {"1 Oct", "1.5 Oct", "2 Oct"};
+        static const char *const VSPREAD_NAMES[3] = {"Off", "Spread 1", "Spread 2"};
+        s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][2].flags = s->cell[0][3].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][0].label, "Voicing", sizeof s->cell[0][0].label);
+        cu_cpy(s->cell[0][0].value, cs.vmode ? "Window" : "Normal", sizeof s->cell[0][0].value);
+        cu_cpy(s->cell[0][1].label, "Window", sizeof s->cell[0][1].label);
+        cu_cpy(s->cell[0][1].value, VWIN_NAMES[cs.vwin % 3u], sizeof s->cell[0][1].value);
+        cu_cpy(s->cell[0][2].label, "Center", sizeof s->cell[0][2].label);
+        cr_note_name(cs.vcenter, s->cell[0][2].value);
+        cu_cpy(s->cell[0][3].label, "Spread", sizeof s->cell[0][3].label);
+        cu_cpy(s->cell[0][3].value, VSPREAD_NAMES[cs.vspread % 3u], sizeof s->cell[0][3].value);
+        if (!cs.vmode) {
+            s->cell[0][1].flags |= CR_CF_DIM;
+            s->cell[0][2].flags |= CR_CF_DIM;
+            s->cell[0][3].flags |= CR_CF_DIM;
+        }
+        cu_hot_row(s, L_KEY);
+        return;
+    }
     if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard, Snap, Numerals */
         s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON;
         s->cell[0][2].flags = (uint8_t)(CR_CF_ON | (cs.key_notes ? 0u : CR_CF_DIM));   /* (Snap changes nothing
@@ -7225,7 +7266,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         s->title_col = CR_COL_WHITE;
         cu_cpy(s->label, cs.key_play ? "key \267 keys play" : "key \267 keys pick", sizeof s->label);   /* (as "perform
                                                                                                     * \267 on") */
-        cu_cat(s->label, cu.kpage ? " \267 2/2" : " \267 1/2", sizeof s->label);   /* (the page: SELECT) */
+        cu_cat(s->label, cu.kpage == 2 ? " \267 3/3" : cu.kpage == 1 ? " \267 2/3" : " \267 1/3", sizeof s->label);   /* (the page: SELECT) */
         cu_cpy(s->footer, cs.key_play ? "SELECT: page \267 GLO: pick \267 OCT-: back"     /* (GLO: to the other) */
                                       : "SELECT: page \267 MAJ MIN: scale \267 GLO: play", sizeof s->footer);
         for (k = CU_PICK0; cs.key_on && k < CU_NKEY; k++)
@@ -8337,6 +8378,10 @@ static void cr_ui_init(void)
     cs.perform_on = cr.perform_on;
     cs.sticky = cr.sticky;
     cs.vel = 100;
+    cs.vmode = 0;
+    cs.vwin = 0;
+    cs.vcenter = 60;
+    cs.vspread = 0;
     cs.suswin = 30;                               /* (the settings' default, before a record is read) */
     for (m = 0; m < CR_PM_COUNT; m++)
         for (p = 0; p < CR_P_COUNT; p++)

@@ -247,6 +247,50 @@ int cr_voice_apply(const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX])
     return n;
 }
 
+/* Octave Window Inversion & Spread:
+ * Clamps chord notes to window [W_low, W_high) where W_low = center + voicing offset,
+ * and W_high = W_low + window_size (12, 18, or 24 st).
+ * Then applies optional Spread (open voicing). */
+int cr_voice_window_apply(const cr_t *c, const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX])
+{
+    static const uint8_t WIN_SZ[3] = { 12, 18, 24 };
+    int i, sz = WIN_SZ[c->vwin > 2 ? 0 : c->vwin];
+    int center = c->vcenter ? c->vcenter : 60;
+    int w_low = center + k;
+    int w_high = w_low + sz;
+
+    if (!n) return 0;
+    for (i = 0; i < n; i++) {
+        int note = base[i];
+        while (note < w_low && note + 12 <= 127) note += 12;
+        while (note >= w_high && note - 12 >= 0) note -= 12;
+        out[i] = (uint8_t)crx_clamp(note, 0, 127);
+    }
+    crx_sort(out, n);
+
+    if (c->vspread == 1) {
+        for (i = 1; i < n; i += 2) {
+            if (out[i] + 12 <= 127) out[i] += 12;
+        }
+        crx_sort(out, n);
+    } else if (c->vspread == 2) {
+        if (n > 1 && out[1] + 12 <= 127) out[1] += 12;
+        if (n > 3) {
+            if (out[3] + 24 <= 127) out[3] += 24;
+            else if (out[3] + 12 <= 127) out[3] += 12;
+        }
+        crx_sort(out, n);
+    }
+    return n;
+}
+
+static int crx_apply_voicing(const cr_t *c, const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX])
+{
+    if (c->vmode)
+        return cr_voice_window_apply(c, base, n, k, out);
+    return cr_voice_apply(base, n, k, out);
+}
+
 /* Secret Chords (design.md 6.3): the two most-recently-held Chord Types map to a secret quality when the
  * scope allows it for this Play Style, else 0. Types firmware-confirmed; the combo map is a Choralroot
  * choice (provisional: min+sus -> min4 inferred). Modifiers stack normally; nothing is consumed. */
@@ -752,7 +796,7 @@ static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, in
     v->serial = ++c->serial;
     v->gid = ++c->gid;
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, crx_voic(c, v), v->notes);
+    v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, crx_voic(c, v), v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;
@@ -822,7 +866,7 @@ static void crx_transform_voice(cr_t *c, int vi, int reattack)
 {
     cr_voice_t *v = &c->v[vi];
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, crx_voic(c, v), v->notes);
+    v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, crx_voic(c, v), v->notes);
     crx_note_last_chord(c, vi);
     /* Full re-strike (not performing): Chord Type press (reattack) or Play Chord; else Add Note diffs. */
     if (!c->perform_on && (reattack || c->extadd == CR_EXTADD_PLAY_CHORD)) {
@@ -932,6 +976,10 @@ void cr_init(cr_t *c, const cr_out_t *out)
     c->single = CR_SINGLE_FULL;
     c->split_pc = 5;
     c->split_note = 65;              /* F4: the split key (cr_set_keyboard) */
+    c->vmode = 0;
+    c->vwin = 0;
+    c->vcenter = 60;
+    c->vspread = 0;
     c->stream_on[CR_STREAM_MAIN] = 1;
     c->stream_on[CR_STREAM_BASS] = 1;
     c->stream_on[CR_STREAM_RAW] = 0;
@@ -1133,7 +1181,24 @@ void cr_voicing_step(cr_t *c, int d)
         if (!v->used || (v->zone && !((v->zone & CR_Z_FULL) && v->rq)) || (v->loop & CR_LOOP_FIXV))
             continue;                              /* (a loop step with its own voicing; a note with nothing to rotate) */
         crx_hush_voice(c, i);
-        v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, nv, v->notes);
+        v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, nv, v->notes);
+        crx_sound_voice(c, i);
+    }
+}
+
+void cr_set_voice_window(cr_t *c, uint8_t mode, uint8_t win, uint8_t center, uint8_t spread)
+{
+    int i;
+    c->vmode = mode ? 1 : 0;
+    c->vwin = win > 2 ? 0 : win;
+    c->vcenter = center ? center : 60;
+    c->vspread = spread > 2 ? 0 : spread;
+    for (i = 0; i < CR_NVOICE; i++) {
+        cr_voice_t *v = &c->v[i];
+        if (!v->used || (v->zone && !((v->zone & CR_Z_FULL) && v->rq)) || (v->loop & CR_LOOP_FIXV))
+            continue;
+        crx_hush_voice(c, i);
+        v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, crx_voic(c, v), v->notes);
         crx_sound_voice(c, i);
     }
 }
@@ -1341,7 +1406,7 @@ void cr_pad_down(cr_t *c, int slot)
     v->serial = ++c->serial;
     v->gid = ++c->gid;
     v->nbase = (uint8_t)cr_chord_base_ex(d->root + v->transpose, d->q, d->x, c->sixth_up, v->base);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, c->voicing, v->notes);
+    v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, c->voicing, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;
@@ -1417,7 +1482,7 @@ int cr_loop_event_v(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8
     } else {
         voic = c->voicing;
     }
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : voic, v->notes);
+    v->nnotes = (uint8_t)crx_apply_voicing(c, v->base, v->nbase, v->zone ? 0 : voic, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;

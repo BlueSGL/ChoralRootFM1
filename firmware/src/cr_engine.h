@@ -161,6 +161,7 @@ typedef struct {
                                       * the scale plays the nearest note of the scale (Scale) or of the chord
                                       * sounding (Chord; the scale's when none) instead of nothing (cr_snap_note);
                                       * in the padding after the three streams: cr_t keeps its size */
+    uint8_t vmode, vwin, vcenter, vspread;   /* Octave Window Inversion & Spread */
     int16_t par[CR_PM_COUNT][CR_P_COUNT];
     /* runtime */
     cr_out_t out;
@@ -346,5 +347,7 @@ int  cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_C
 /* .. as the engine builds a chord: sixth_up = cr_t.sixth_up (Options > 6th with 7th) */
 int  cr_chord_base_ex(int root_note, uint8_t quality, uint8_t ext, int sixth_up, uint8_t out[CR_CHORD_MAX]);
 int  cr_voice_apply(const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX]);
+int  cr_voice_window_apply(const cr_t *c, const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX]);
+void cr_set_voice_window(cr_t *c, uint8_t mode, uint8_t win, uint8_t center, uint8_t spread);
 
 #endif
